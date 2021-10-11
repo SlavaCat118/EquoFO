@@ -2,6 +2,11 @@
 A equation based LFO generator for the Vital synthesizer
 
 # Basic HowTo:
+- Create your equation by adding functions to the Raw Equation box
+- This can be done by pressing the 'Add' buttons next to the function dropdowns
+- Press Copy LFO to Clipboard, or Export LFO to file, to save your LFO
+
+# Advanced
 ## The Header
 - The header is at the very top of the application and controls the name of the LFO, smoothing, and presets
 - The buttons to the left of smoothing are for preset manipulation, their function can be seen in the status bar while hovering

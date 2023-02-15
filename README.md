@@ -37,3 +37,6 @@ A equation based LFO generator for the Vital synthesizer
 - Export LFO to file - Exports the LFO to a file so you can import it into Vital
 - View Points - Will display the points of the graph, without smoothing applied
 - View Unsmoothed - Will display a second graph with the unsmoothed points
+
+## Note
+EquoFo was compiled with pyinstaller, so that means Windows Defender will detect it as a Trojan (thanks malware devs!). Run it if you like, or install python to run from source.

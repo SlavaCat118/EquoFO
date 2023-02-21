@@ -6,18 +6,9 @@ import math
 import numpy as np
 import random
 import entries
+import soundfile as sf
 # import traceback
 
-class DEFAULTS:
-	NAME = "New LFO"
-	EQUATION = "math.sin(x)"
-	SMOOTH = False
-	X_START = -math.pi
-	X_END = math.pi
-	Y_START = -1
-	Y_END = 1
-	RESOLUTION = 17
-	PHASE = 0
 
 class AppState:
 	def __init__(self):
@@ -431,6 +422,31 @@ def main():
 				file.write(serializeIntoVitalLFOPreset())
 			file.close()
 
+	def exportAsWavetable():
+		file = filedialog.asksaveasfile(
+			mode = 'w',
+			filetypes=(
+				("FLAC", "*.flac"),
+				("AIFF", "*.aiff"),
+				("WAV", "*.wav"),),
+			defaultextension = 'FLAC',
+			initialfile = state.name.get().strip())
+		if file is not None:
+			filename = file.name
+			filename_lower = filename.lower()
+			file.close()
+
+			points = getPoints(2048)
+			data = scaleToRange(points['y'], -1.0, 1.0)
+
+			subtype = 'PCM_24' if filename_lower.endswith('.flac') else 'FLOAT'
+
+			sf.write(
+				file=filename,
+				data=data,
+				samplerate=48000 * 2,
+				subtype=subtype)
+
 	def handleShiftLeftButtonClick():
 		equationTextInput.icursor(equationTextInput.index(tk.INSERT)-1)
 		setFocus(1)
@@ -618,18 +634,19 @@ def main():
 	updatePlotButton.grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,10))
 	updatePlotButtonTT = Tooltip(updatePlotButton, "Force updates the x/y plot")
 
-	ttk.Button(previewer, text = "Copy LFO to clipboard", command = copyLFOPresetToClipboard) .grid(row = 3, column = 1, sticky = tk.NSEW, pady = (0,10))
-	ttk.Button(previewer, text = "Export LFO to file", command = exportAsLFOPreset) .grid(row = 3, column = 2, sticky = tk.NSEW, pady = (0,10))
+	ttk.Button(previewer, text = "Copy preset to clipboard", command = copyLFOPresetToClipboard) .grid(row = 3, column = 1, sticky = tk.NSEW, pady = (0,10))
+	ttk.Button(previewer, text = "Export preset", command = exportAsLFOPreset) .grid(row = 3, column = 2, sticky = tk.NSEW, pady = (0,10))
+	ttk.Button(previewer, text = "Export wavetable", command = exportAsWavetable) .grid(row = 3, column = 3, sticky = tk.NSEW, pady = (0,10))
 
-	ttk.Label(previewer, text = "View Points: ") .grid(row = 3, column = 3, sticky = tk.E)
+	ttk.Label(previewer, text = "View Points: ") .grid(row = 3, column = 4, sticky = tk.E)
 	viewPoints = tk.BooleanVar()
 	viewPoints.set(True)
-	ttk.Checkbutton(previewer, var = viewPoints) .grid(row = 3, column = 4, sticky = tk.W)
+	ttk.Checkbutton(previewer, var = viewPoints) .grid(row = 3, column = 5, sticky = tk.W)
 
-	ttk.Label(previewer, text = "View Unsmoothed: ") .grid(row = 3, column = 5, sticky = tk.E)
+	ttk.Label(previewer, text = "View Unsmoothed: ") .grid(row = 3, column = 6, sticky = tk.E)
 	viewUnsmoothedVal = tk.BooleanVar()
 	viewUnsmoothedVal.set(True)
-	ttk.Checkbutton(previewer, var = viewUnsmoothedVal) .grid(row = 3, column = 6, sticky = tk.W)
+	ttk.Checkbutton(previewer, var = viewUnsmoothedVal) .grid(row = 3, column = 7, sticky = tk.W)
 
 	# StatusBar
 	# status = ttk.Label(root2, text = 'Welcome to EquaFO!', borderwidth = 1, relief = "sunken")

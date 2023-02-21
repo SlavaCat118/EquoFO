@@ -252,8 +252,12 @@ def main():
 	# 	y = eval(equationString)
 	# 	return y
 
-	def getPoints(xStart, xEnd, yStart, yEnd):
-		numPoints = state.resolution.get()
+	def getPoints(numPoints):
+		xStart = state.xStart
+		xEnd = state.xEnd
+		yStart = state.yStart
+		yEnd = state.yEnd
+
 		xpoints = np.arange(xStart, xEnd, (xEnd - xStart) / (numPoints - 1))
 		xpoints = np.append(xpoints, xEnd)
 
@@ -287,7 +291,7 @@ def main():
 			yStart = state.yStart
 			yEnd = state.yEnd
 
-			points = getPoints(xStart, xEnd, yStart, yEnd)
+			points = getPoints(state.resolution.get())
 
 			xpoints = scaleToRange(points['x'],0,canvasWidth)
 
@@ -347,10 +351,6 @@ def main():
 			# print(traceback.format_exc())
 			xyPlot.create_text(20,10, text = "Error")
 
-	def	updateEvent(event):
-		updateXYPlot()
-		createLFOPresetJSON()
-
 	def handleResolutionChanged(event):
 		state.resolution.set(round(float(state.resolution.get())))
 		updateXYPlot()
@@ -370,8 +370,27 @@ def main():
 		else:
 			return False
 
-	def createLFOPresetJSON():
-		points = getPoints(eval(xStartTextField.get().strip()), (eval(xEndTextField.get().strip())), (eval(yStartTextField.get().strip())), (eval(yEndTextField.get().strip())))
+	def serializeIntoGHOSTLFOPreset():
+		points = getPoints(state.resolution.get())
+		xpoints = scaleToRange(points['x'],0,1)
+		ypoints = scaleToRange(points['y'],1,0)
+		assert len(xpoints) == len(ypoints)
+
+		combined = np.array([xpoints, ypoints]).T
+
+		pointObjects = [{'x': x, 'y': y, 'skew': 0.5} for x, y in combined]
+
+		data = {
+			"version": "0.3.9",
+			"lfo": {
+				"name": state.name.get(),
+				"points": pointObjects,
+			}
+		}
+		return fh.toJson(data)
+
+	def serializeIntoVitalLFOPreset():
+		points = getPoints(state.resolution.get())
 		xpoints = scaleToRange(points['x'],0,1)
 		ypoints = scaleToRange(points['y'],1,0)
 		assert len(xpoints) == len(ypoints)
@@ -379,19 +398,38 @@ def main():
 		combined = np.concatenate(np.array([xpoints, ypoints]).T).tolist()
 
 		root.clipboard_clear()
-		lfo = {"name":state.name.get().strip(),"num_points":state.resolution.get(),"points":combined, "powers":[0.0 for i in range(len(xpoints))],"smooth":state.smooth.get()}
-		root.clipboard_append(fh.toJson(lfo))
-		return fh.toJson(lfo)
+		data = {
+			"name":state.name.get().strip(),
+			"num_points":state.resolution.get(),
+			"points":combined,
+			"powers":[0.0 for i in range(len(xpoints))],
+			"smooth":state.smooth.get(),
+		}
+		return fh.toJson(data)
+
+	def copyLFOPresetToClipboard():
+		data = serializeIntoVitalLFOPreset()
+		root.clipboard_append(data)
 
 	def handleEquationUpdated(var, indx, mode):
 		prettyEquationString.set(state.equation.get().strip().replace('math.','').replace('**','^').replace('sqrt','√').replace('random.',''))
 		updateXYPlot()
 
 	def exportAsLFOPreset():
-		path = filedialog.asksaveasfile(mode = 'w', defaultextension = 'VITALLFO', initialfile = state.name.get().strip())
-		if path is not None:
-			path.write(createLFOPresetJSON())
-			path.close()
+		file = filedialog.asksaveasfile(
+			mode = 'w',
+			filetypes=(
+				("GHOST", "*.json"),
+				("Vital", "*.vitallfo")),
+			defaultextension = 'JSON', # GHOST FTW!
+			initialfile = state.name.get().strip())
+		if file is not None:
+			filename = file.name.lower()
+			if filename.endswith('.json'):
+				file.write(serializeIntoGHOSTLFOPreset())
+			elif filename.endswith('.vitallfo'):
+				file.write(serializeIntoVitalLFOPreset())
+			file.close()
 
 	def handleShiftLeftButtonClick():
 		equationTextInput.icursor(equationTextInput.index(tk.INSERT)-1)
@@ -580,7 +618,7 @@ def main():
 	updatePlotButton.grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,10))
 	updatePlotButtonTT = Tooltip(updatePlotButton, "Force updates the x/y plot")
 
-	ttk.Button(previewer, text = "Copy LFO to clipboard", command = createLFOPresetJSON) .grid(row = 3, column = 1, sticky = tk.NSEW, pady = (0,10))
+	ttk.Button(previewer, text = "Copy LFO to clipboard", command = copyLFOPresetToClipboard) .grid(row = 3, column = 1, sticky = tk.NSEW, pady = (0,10))
 	ttk.Button(previewer, text = "Export LFO to file", command = exportAsLFOPreset) .grid(row = 3, column = 2, sticky = tk.NSEW, pady = (0,10))
 
 	ttk.Label(previewer, text = "View Points: ") .grid(row = 3, column = 3, sticky = tk.E)
@@ -601,9 +639,9 @@ def main():
 		equationTextInput.focus_set()
 	def endFocus(event):
 		root.focus_set()
-	# KEYBONDINGS
+	# KEYBINDINGS
 	# root.bind("<Return>", updateEvent)
-	root.bind("<ButtonRelease-1>", updateEvent)
+	root.bind("<ButtonRelease-1>", lambda e: updateXYPlot())
 	adder.bind("<Enter>", setFocus)
 	equationTextInput.bind("<Enter>",setFocus)
 	eqButtons.bind("<Enter>",setFocus)

@@ -146,6 +146,14 @@ def main():
 	backspaceIcon = tk.PhotoImage(file="icons/backspaceIcon.png")
 
 	#Functions
+	def rescale(sourceValue, sourceRangeMin, sourceRangeMax, targetRangeMin, targetRangeMax):
+		# protecc from ZeroDivisionError
+		assert (sourceRangeMax != sourceRangeMin)
+		return targetRangeMin + ((targetRangeMax - targetRangeMin) * (sourceValue - sourceRangeMin)) / (sourceRangeMax - sourceRangeMin)
+
+	def limit(v, low, high):
+		return min(max(v, low), high)
+
 	def fixEquation():
 		toIndex = equationTextInput.get().find('`')
 		eqHold = equationTextInput.get()
@@ -227,27 +235,33 @@ def main():
 		state.reset()
 		updateXYPlot()
 
-	def getPoints(xStart, xEnd, yStart, yEnd):
+	def execute_equation_for_list(x):
 		def np_uniform(low, high):
 			return np.random.uniform(low, high, state.resolution.get())
 		def np_randint(low, high):
 			return np.random.randint(low, high, state.resolution.get())
+		equationString = state.equation.get().replace('math.', 'np.')
+		equationString = equationString.replace('round', 'np.around')
+		equationString = equationString.replace('random.uniform', 'np_uniform')
+		equationString = equationString.replace('random.randrange', 'np_randint')
 
+		y = eval(equationString)
+		return y
+
+	# def execute_equation_for_val(x):
+	# 	y = eval(equationString)
+	# 	return y
+
+	def getPoints(xStart, xEnd, yStart, yEnd):
 		numPoints = state.resolution.get()
 		xpoints = np.arange(xStart, xEnd, (xEnd - xStart) / (numPoints - 1))
 		xpoints = np.append(xpoints, xEnd)
 
-		xpoints = xpoints + state.phase.get() * (xEnd - xStart)
-
 		ypoints = []
 		try:
-			x = xpoints
-			equationString = state.equation.get().replace('math.', 'np.')
-			equationString = equationString.replace('round', 'np.around')
-			equationString = equationString.replace('random.uniform', 'np_uniform')
-			equationString = equationString.replace('random.randrange', 'np_randint')
+			x = xpoints + state.phase.get() * (xEnd - xStart)
 
-			ypoints = eval(equationString)
+			ypoints = execute_equation_for_list(x)
 
 			if scaleY.get() == False:
 				ypoints = np.clip(ypoints, min(yStart, yEnd), max(yStart, yEnd))
@@ -277,30 +291,42 @@ def main():
 
 			xpoints = scaleToRange(points['x'],0,canvasWidth)
 
+			xMin = min(points['x'])
+			xMax = max(points['x'])
 			yMin = min(points['y'])
 			yMax = max(points['y'])
 
 			if scaleY.get():
-				ypoints = scaleToRange(points['y'],canvasHeight,0)
+				ypoints = scaleToRange(points['y'],canvasHeight, 0)
+				plane0Y = rescale(0, yMin, yMax, canvasHeight, 0)
+				yLimTop = yMax
+				yLimBottom = yMin
 			else:
-				ypoints = canvasHeight + (-canvasHeight * (points['y'] - yStart)) / (yEnd - yStart)
+				ypoints = np.interp(points['y'], (yStart,yEnd), (canvasHeight, 0))
+				plane0Y = rescale(0, yStart, yEnd, canvasHeight, 0)
+				yLimTop = yEnd
+				yLimBottom = yStart
 
-			canvasXAxis = scaleToRange([-max(abs(yStart), abs(yEnd)), 0, max(abs(yStart), abs(yEnd))], canvasHeight, 0)
-			canvasYAxis = scaleToRange([xStart, 0, xEnd], 0, canvasWidth)
+			plane0X = rescale(0, xMin, xMax, 0, canvasWidth)
 
 			combined = np.array([xpoints, ypoints]).T.tolist()
 
+			# clear canvas
 			xyPlot.delete("all")
 
-			xyPlot.create_text(canvasYAxis[1]+10, canvasHeight-10, text = yMin if scaleY.get() else state.yStart)
-			xyPlot.create_text(canvasYAxis[1]+10, 10, text = yMax if scaleY.get() else state.yEnd)
-			xyPlot.create_text(10, canvasXAxis[1]+10, text = min(points['x']))
-			xyPlot.create_text(canvasWidth-10, canvasXAxis[1]+10, text = max(points['x']))
-			xyPlot.create_line(canvasYAxis[1], canvasXAxis[0], canvasYAxis[1], canvasXAxis[2], canvasYAxis[1], canvasXAxis[1], canvasWidth, canvasXAxis[1], 0, canvasXAxis[1], fill = 'red', width = 2, smooth = False)
+			# draw axis
+			xyPlot.create_line(0, plane0Y, canvasWidth, plane0Y, fill = 'red', width = 2, smooth = False)
+			xyPlot.create_line(plane0X, 0, plane0X, canvasHeight, fill = 'red', width = 2, smooth = False)
+			# draw axis labels
+			xyPlot.create_text(0, limit(plane0Y + 8, 0, canvasHeight), text=str(round(xStart, 3)), fill='black', anchor=tk.W)
+			xyPlot.create_text(canvasWidth, limit(plane0Y + 8, 0, canvasHeight), text=str(round(xEnd,3)), fill='black', anchor=tk.E)
+			xyPlot.create_text(plane0X+2, 0, text=str(round(yLimTop,3)), fill='black', anchor=tk.NW)
+			xyPlot.create_text(plane0X+2, canvasHeight, text=str(round(yLimBottom,3)), fill='black', anchor=tk.SW)
 
-			radius = 2
-			diameter = 2 * radius
 			if viewPoints.get() == True:
+				radius = 2
+				diameter = 2 * radius
+
 				for px, py in combined:
 					x1 = round(px-radius)
 					y1 = round(py-radius)
@@ -311,8 +337,6 @@ def main():
 					y2 = y1 + diameter
 
 					xyPlot.create_oval(x1, y1, x2, y2, fill = 'black', outline = 'black')
-			else:
-				pass
 
 			if viewUnsmoothedVal.get() == True:
 				xyPlot.create_line(combined, fill = 'darkGrey', width = 1, smooth = False)
@@ -479,7 +503,7 @@ def main():
 	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
 	ttk.Label(adder, textvariable = state.resolution) .grid(row = 4, column = 5, sticky = tk.W)
 
-	ttk.Label(adder, text = "x Phase:" ) .grid(row = 7, column = 0, sticky = tk.E)
+	ttk.Label(adder, text = "x Phase Offset:" ) .grid(row = 7, column = 0, sticky = tk.E)
 
 	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = state.phase, value = 0, command = handlePhaseChanged)
 	xPhase.grid(row = 7, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)

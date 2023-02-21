@@ -142,7 +142,7 @@ def main():
 		fixEquation()
 
 	def savePresetToDB():
-		values = {"smooth":smooth.get(),"equation":equation.get().strip(), "range":[(eval(xStart.get().strip())), (eval(xEnd.get().strip())), (eval(yStart.get().strip())), (eval(yEnd.get().strip()))], 'resolution':resolutionValue.get(),'xPhase':xPhase.get()}
+		values = {"smooth":smooth.get(),"equation":equation.get().strip(), "range":[(eval(xStartTextField.get().strip())), (eval(xEndTextField.get().strip())), (eval(yStartTextField.get().strip())), (eval(yEndTextField.get().strip()))], 'resolution':resolutionValue.get(),'xPhase':xPhase.get()}
 		presetsDB[name.get().strip()] = values
 		fh.writeJson('presets.json', presetsDB)
 		presetName.set(name.get().strip())
@@ -156,19 +156,19 @@ def main():
 		smooth.set(preset['smooth'])
 		equation.delete(0,tk.END)
 		equation.insert(0,preset['equation'])
-		xStart.delete(0,tk.END)
-		xStart.insert(0,preset['range'][0])
-		xEnd.delete(0,tk.END)
-		xEnd.insert(0,preset['range'][1])
-		yStart.delete(0,tk.END)
-		yStart.insert(0,preset['range'][2])
-		yEnd.delete(0,tk.END)
-		yEnd.insert(0,preset['range'][3])
+		xStartTextField.delete(0,tk.END)
+		xStartTextField.insert(0,preset['range'][0])
+		xEndTextField.delete(0,tk.END)
+		xEndTextField.insert(0,preset['range'][1])
+		yStartTextField.delete(0,tk.END)
+		yStartTextField.insert(0,preset['range'][2])
+		yEndTextField.delete(0,tk.END)
+		yEndTextField.insert(0,preset['range'][3])
 		resolutionValue.set(preset['resolution'])
 		xPhase.set(presetsDB[presetName.get()]['xPhase'])
-		updatePreview()
+		updateXYPlot()
 
-	def deletePreset():
+	def deletePresetFromDB():
 		if len(presetsDB) > 1:
 			presetsDB.pop(presetName.get())
 			fh.writeJson('presets.json',presetsDB)
@@ -186,109 +186,112 @@ def main():
 		smooth.set(DEFAULTS.SMOOTH)
 		equation.delete(0,tk.END)
 		equation.insert(0,DEFAULTS.EQUATION)
-		xStart.delete(0,tk.END)
-		xStart.insert(0,DEFAULTS.X_START)
-		xEnd.delete(0,tk.END)
-		xEnd.insert(0,DEFAULTS.X_END)
-		yStart.delete(0,tk.END)
-		yStart.insert(0,DEFAULTS.Y_START)
-		yEnd.delete(0,tk.END)
-		yEnd.insert(0,DEFAULTS.Y_END)
+		xStartTextField.delete(0,tk.END)
+		xStartTextField.insert(0,DEFAULTS.X_START)
+		xEndTextField.delete(0,tk.END)
+		xEndTextField.insert(0,DEFAULTS.X_END)
+		yStartTextField.delete(0,tk.END)
+		yStartTextField.insert(0,DEFAULTS.Y_START)
+		yEndTextField.delete(0,tk.END)
+		yEndTextField.insert(0,DEFAULTS.Y_END)
 		resolutionValue.set(DEFAULTS.RESOLUTION)
 		phaseOffsetValue.set(DEFAULTS.PHASE)
-		updatePreview()
+		updateXYPlot()
 
 	def getPoints(xStart, xEnd, yStart, yEnd):
 		numPoints = resolutionValue.get()
 		xRange = abs(xEnd-xStart)
-		xpoints = scaleToRange([i for i in range(numPoints)], 0, xRange)
-		xpoints = [i+xStart for i in xpoints]
+		xpoints = np.arange(xStart, xEnd, (xEnd - xStart) / (numPoints - 1))
+		xpoints = np.append(xpoints, xEnd)
 
 		ypoints = []
 		try:
-			for i in xpoints:
-				x = i + xPhase.get()
+			x = xpoints
+			ypoints = eval(equation.get().replace('math.', 'np.'))
 
-				try:
-					result = eval(equation.get())
-				except ValueError:
-					result = yStart
+			if scaleY.get() == False:
+				ypoints = np.clip(ypoints, min(yStart, yEnd), max(yStart, yEnd))
 
-				if result < yStart:
-					ypoints.append(yStart)
-				elif result > yEnd:
-					ypoints.append(yEnd)
-				else:
-					ypoints.append(result)
 		except Exception:
 			ypoints = [0 for i in range(len(xpoints))]
 			xyPlot.create_text(20,10, text = "Error", fill = 'red')
-
-		if scaleY.get() == False:
-			ypoints.extend([yStart, yEnd])
 
 		points = {'x':xpoints,'y':ypoints}
 		return points
 
 	def scaleToRange(arr, start, end):
 		scaled = np.ndarray.tolist(np.interp(arr, (min(arr), max(arr)), (start, end)))
-		scaled = [round(i, 3) for i in scaled]
+		# scaled = [round(i, 3) for i in scaled]
 		return scaled
 
-	def updatePreview():
+	def updateXYPlot():
 		try:
-			points = getPoints((eval(xStart.get().strip())), (eval(xEnd.get().strip())), (eval(yStart.get().strip())), (eval(yEnd.get().strip())))
+			xStart = eval(xStartTextField.get().strip())
+			xEnd = eval(xEndTextField.get().strip())
+			yStart = eval(yStartTextField.get().strip())
+			yEnd = eval(yEndTextField.get().strip())
+
+			points = getPoints(xStart, xEnd, yStart, yEnd)
 
 			xpoints = scaleToRange(points['x'],0,canvasWidth)
-			ypoints = scaleToRange(points['y'],canvasHeight,0)
 
-			canvasXAxis = scaleToRange([eval(yStart.get().strip()), 0, eval(yEnd.get().strip())],canvasHeight,0)
-			canvasYAxis = scaleToRange([eval(xStart.get().strip()), 0, eval(xEnd.get().strip())], 0, canvasWidth)
+			yMin = min(points['y'])
+			yMax = max(points['y'])
 
-			combined = []
-			for i in range(len(xpoints)):
-				combined.append(xpoints[i])
-				combined.append(ypoints[i]+1)
+			if scaleY.get():
+				ypoints = scaleToRange(points['y'],canvasHeight,0)
+			else:
+				ypoints = canvasHeight - (canvasHeight * (points['y'] - yStart)) / (yEnd - yStart)
 
+			canvasXAxis = scaleToRange([yStart, 0, yEnd], canvasHeight, 0)
+			canvasYAxis = scaleToRange([xStart, 0, xEnd], 0, canvasWidth)
+
+			combined = np.array([xpoints, ypoints]).T.tolist()
 
 			xyPlot.delete("all")
 
-			xyPlot.create_text(canvasYAxis[1]+10, canvasHeight-10, text = eval(yStart.get().strip()))
-			xyPlot.create_text(canvasYAxis[1]+10, 10, text = eval(yEnd.get().strip()))
-			xyPlot.create_text(10, canvasXAxis[1]+10, text = eval(xStart.get().strip()))
-			xyPlot.create_text(canvasWidth-10, canvasXAxis[1]+10, text = eval(xEnd.get().strip()))
+			xyPlot.create_text(canvasYAxis[1]+10, canvasHeight-10, text = yMin if scaleY.get() else eval(yStartTextField.get().strip()))
+			xyPlot.create_text(canvasYAxis[1]+10, 10, text = yMax if scaleY.get() else eval(yEndTextField.get().strip()))
+			xyPlot.create_text(10, canvasXAxis[1]+10, text = min(points['x']))
+			xyPlot.create_text(canvasWidth-10, canvasXAxis[1]+10, text = max(points['x']))
 			xyPlot.create_line(canvasYAxis[1], canvasXAxis[0], canvasYAxis[1], canvasXAxis[2], canvasYAxis[1], canvasXAxis[1], canvasWidth, canvasXAxis[1], 0, canvasXAxis[1], fill = 'red', width = 2, smooth = False)
 
-			pW = 2
+			radius = 2
+			diameter = 2 * radius
 			if viewPoints.get() == True:
-				for i in range(len(xpoints)):
-					x1 = round(xpoints[i]-pW)
-					y1 = round(ypoints[i]-pW)
-					x2 = x1 + 2 * pW
-					y2 = y1 + 2 * pW
+				for px, py in combined:
+					x1 = round(px-radius)
+					y1 = round(py-radius)
+					x1 = min(max(x1, 0), canvasWidth - diameter)
+					y1 = min(max(y1, 0), canvasHeight - diameter)
+
+					x2 = x1 + diameter
+					y2 = y1 + diameter
+
 					xyPlot.create_oval(x1, y1, x2, y2, fill = 'black', outline = 'black')
 			else:
 				pass
 
-			if viewHints.get() == True:
+			if viewUnsmoothedVal.get() == True:
 				xyPlot.create_line(combined, fill = 'darkGrey', width = 1, smooth = False)
 
 			xyPlot.create_line(combined, fill = 'Black', width = 1, smooth = smooth.get())
 
-		except Exception:
+		except Exception as e:
+			print(e)
 			xyPlot.create_text(20,10, text = "Error")
 
 	def	updateEvent(event):
-		updatePreview()
+		updateXYPlot()
 		createLFOPresetJSON()
 
 	def handleResolutionChanged(event):
 		resolutionValue.set(round(float(resolutionValue.get())))
-		updatePreview()
+		updateXYPlot()
 
 	def handlePhaseChanged(event):
 		phaseOffsetValue.set(round(float(phaseOffsetValue.get()), 5))
-		updatePreview()
+		updateXYPlot()
 
 	def intEntryCallback(text):
 		allowedChars = "1234567890-+/*."
@@ -302,14 +305,12 @@ def main():
 			return False
 
 	def createLFOPresetJSON():
-		points = getPoints((eval(xStart.get().strip())), (eval(xEnd.get().strip())), (eval(yStart.get().strip())), (eval(yEnd.get().strip())))
+		points = getPoints(eval(xStartTextField.get().strip()), (eval(xEndTextField.get().strip())), (eval(yStartTextField.get().strip())), (eval(yEndTextField.get().strip())))
 		xpoints = scaleToRange(points['x'],0,1)
 		ypoints = scaleToRange(points['y'],1,0)
+		assert len(xpoints) == len(ypoints)
 
-		combined = []
-		for i in range(len(xpoints)):
-			combined.append(xpoints[i])
-			combined.append(ypoints[i])
+		combined = np.array([xpoints, ypoints]).T.tolist()
 
 		root.clipboard_clear()
 		lfo = {"name":name.get().strip(),"num_points":resolutionValue.get(),"points":combined, "powers":[0.0 for i in range(len(xpoints))],"smooth":smooth.get()}
@@ -318,7 +319,7 @@ def main():
 
 	def handleEquationUpdated(var, indx, mode):
 		prettyEquationString.set(equation.get().strip().replace('math.','').replace('**','^').replace('sqrt','√').replace('random.',''))
-		updatePreview()
+		updateXYPlot()
 
 	def exportAsLFOPreset():
 		path = filedialog.asksaveasfile(mode = 'w', defaultextension = 'VITALLFO', initialfile = name.get().strip())
@@ -368,7 +369,7 @@ def main():
 	savePresetButton = ttk.Button(header, image = saveIcon, command = savePresetToDB)
 	savePresetButton.grid(row = 0, column = 7, sticky = tk.W)
 	savePresetButtonTT = Tooltip(savePresetButton, 'Save the current equation as preset in presets file')
-	deletePresetButton = ttk.Button(header, image = trashIcon, command = deletePreset)
+	deletePresetButton = ttk.Button(header, image = trashIcon, command = deletePresetFromDB)
 	deletePresetButton.grid(row = 0, column = 8, sticky = tk.W)
 	deletePresetButtonTT = Tooltip(deletePresetButton, 'Delete the selected preset from presets file')
 	initPresetButton = ttk.Button(header, image = newIcon, command = initPreset)
@@ -439,7 +440,6 @@ def main():
 
 	phaseOffsetValue = tk.DoubleVar()
 
-
 	ttk.Label(adder, text = "x Phase:" ) .grid(row = 7, column = 0, sticky = tk.E)
 
 	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = phaseOffsetValue, value = 0, command = handlePhaseChanged)
@@ -449,22 +449,23 @@ def main():
 
 	ttk.Label(adder, text = "x Start: ") .grid(row = 5, column = 0, sticky = tk.E)
 	ttk.Label(adder, text = "x End: ") .grid(row = 5, column = 2, sticky = tk.E)
-	xStart = ttk.Entry(adder, width = 10)
-	xStart.grid(row = 5, column = 1, sticky = tk.W)
-	xEnd = ttk.Entry(adder, width = 10)
-	xEnd.grid(row = 5, column = 3, sticky = tk.W)
+	xStartTextField = ttk.Entry(adder, width = 10)
+	xStartTextField.grid(row = 5, column = 1, sticky = tk.W)
+
+	xEndTextField = ttk.Entry(adder, width = 10)
+	xEndTextField.grid(row = 5, column = 3, sticky = tk.W)
 
 	ttk.Label(adder, text = "y Start: ") .grid(row = 6, column = 0, sticky = tk.E)
 	ttk.Label(adder, text = "y End: ") .grid(row = 6, column = 2, sticky = tk.E)
-	yStart = ttk.Entry(adder, width = 10)
-	yStart.grid(row = 6, column = 1, sticky = tk.W)
-	yEnd = ttk.Entry(adder, width = 10)
-	yEnd.grid(row = 6, column = 3, sticky = tk.W)
+	yStartTextField = ttk.Entry(adder, width = 10)
+	yStartTextField.grid(row = 6, column = 1, sticky = tk.W)
+	yEndTextField = ttk.Entry(adder, width = 10)
+	yEndTextField.grid(row = 6, column = 3, sticky = tk.W)
 
-	xStart.config(validate="key", validatecommand=(reg, '%P'))
-	xEnd.config(validate="key", validatecommand=(reg, '%P'))
-	yStart.config(validate="key", validatecommand=(reg, '%P'))
-	yEnd.config(validate="key", validatecommand=(reg, '%P'))
+	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	xEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yEndTextField.config(validate="key", validatecommand=(reg, '%P'))
 
 	# ttk.Separator(main, orient = 'horizontal') .grid(row = 3, column = 0, sticky = tk.NSEW, pady = 10)
 
@@ -474,11 +475,11 @@ def main():
 
 	ttk.Label(equater, text = "Raw Equation: ") .grid(row = 0, column = 0, sticky = tk.NSEW)
 
-	equationHolder = tk.StringVar()
-	equation = ttk.Entry(equater, width = 95, textvariable = equationHolder)
+	equationString = tk.StringVar()
+	equation = ttk.Entry(equater, width = 95, textvariable = equationString)
 	equation.grid(row = 1, column = 0, sticky = tk.W, ipady = 5)
 
-	equationHolder.trace_add('write',handleEquationUpdated)
+	equationString.trace_add('write',handleEquationUpdated)
 
 	eqButtons = ttk.Frame(equater)
 	eqButtons.grid(row = 2, column = 0, sticky = tk.N)
@@ -494,8 +495,6 @@ def main():
 	ttk.Checkbutton(eqButtons, variable = scaleY) .grid(row = 0, column = 5, sticky = tk.W)
 
 	ttk.Separator(main, orient = 'horizontal') .grid(row = 5, column = 0, sticky = tk.NSEW, pady = 10)
-
-
 
 	# Previewer
 	previewer = ttk.Frame(main)
@@ -515,7 +514,7 @@ def main():
 	xyPlot = tk.Canvas(previewer, width = canvasWidth, height = canvasHeight, bg = 'white')
 	xyPlot.grid(row = 2, column = 0, sticky = tk.NSEW, columnspan = 7)
 
-	updatePlotButton = ttk.Button(previewer, text = "Update", command = updatePreview)
+	updatePlotButton = ttk.Button(previewer, text = "Update", command = updateXYPlot)
 	updatePlotButton.grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,10))
 	updatePlotButtonTT = Tooltip(updatePlotButton, "Force updates the x/y plot")
 
@@ -528,9 +527,9 @@ def main():
 	ttk.Checkbutton(previewer, var = viewPoints) .grid(row = 3, column = 4, sticky = tk.W)
 
 	ttk.Label(previewer, text = "View Unsmoothed: ") .grid(row = 3, column = 5, sticky = tk.E)
-	viewHints = tk.BooleanVar()
-	viewHints.set(True)
-	ttk.Checkbutton(previewer, var = viewHints) .grid(row = 3, column = 6, sticky = tk.W)
+	viewUnsmoothedVal = tk.BooleanVar()
+	viewUnsmoothedVal.set(True)
+	ttk.Checkbutton(previewer, var = viewUnsmoothedVal) .grid(row = 3, column = 6, sticky = tk.W)
 
 	# StatusBar
 	# status = ttk.Label(root2, text = 'Welcome to EquaFO!', borderwidth = 1, relief = "sunken")
@@ -549,7 +548,6 @@ def main():
 	adder.bind("<Leave>", endFocus)
 
 	initPreset()
-	updatePreview()
 	root.mainloop()
 
 if __name__ == '__main__':

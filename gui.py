@@ -6,6 +6,7 @@ import math
 import numpy as np
 import random
 import entries
+# import traceback
 
 class DEFAULTS:
 	NAME = "New LFO"
@@ -17,6 +18,42 @@ class DEFAULTS:
 	Y_END = 1
 	RESOLUTION = 17
 	PHASE = 0
+
+class AppState:
+	def __init__(self):
+		self.name = tk.StringVar()
+		self.equation = tk.StringVar()
+		self.smooth = tk.BooleanVar()
+		self.xStartStringValue = tk.StringVar()
+		self.xEndStringValue = tk.StringVar()
+		self.yStartStringValue = tk.StringVar()
+		self.yEndStringValue = tk.StringVar()
+		self.resolution = tk.IntVar()
+		self.phase = tk.DoubleVar()
+		self.reset()
+	def reset(self):
+		self.name.set("New LFO")
+		self.equation.set("math.sin(x)")
+		self.smooth.set(False)
+		self.xStartStringValue.set(-math.pi)
+		self.xEndStringValue.set(math.pi)
+		self.yStartStringValue.set(-1)
+		self.yEndStringValue.set(1)
+		self.resolution.set(17)
+		self.phase.set(0)
+	@property
+	def xStart(self):
+		return float(self.xStartStringValue.get())
+	@property
+	def xEnd(self):
+		return float(self.xEndStringValue.get())
+	@property
+	def yStart(self):
+		return float(self.yStartStringValue.get())
+	@property
+	def yEnd(self):
+		return float(self.yEndStringValue.get())
+
 
 # https://stackoverflow.com/questions/3221956/how-do-i-display-tooltips-in-tkinter
 class Tooltip(object):
@@ -110,61 +147,67 @@ def main():
 
 	#Functions
 	def fixEquation():
-		toIndex = equation.get().find('`')
-		eqHold = equation.get()
-		equation.delete(0,tk.END)
-		equation.insert(0,eqHold.replace('`',''))
-		equation.icursor(toIndex)
+		toIndex = equationTextInput.get().find('`')
+		eqHold = equationTextInput.get()
+		equationTextInput.delete(0,tk.END)
+		equationTextInput.insert(0,eqHold.replace('`',''))
+		equationTextInput.icursor(toIndex)
 		setFocus(1)
 
 	def addTrigToEquation():
-		equation.insert(equation.index(tk.INSERT), entries.getEntry(trigSelected.get()))
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), entries.getEntry(trigSelected.get()))
 		fixEquation()
 
 	def addOperatorToEquation():
-		equation.insert(equation.index(tk.INSERT), entries.getEntry(OperatorSelected.get()))
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), entries.getEntry(OperatorSelected.get()))
 		fixEquation()
 
 	def addSymbolToEquation():
-		equation.insert(equation.index(tk.INSERT), entries.getEntry(SymbolSelected.get()))
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), entries.getEntry(SymbolSelected.get()))
 		fixEquation()
 
 	def addVariableToEquation():
-		equation.insert(equation.index(tk.INSERT), entries.getEntry(VariableSelected.get()))
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), entries.getEntry(VariableSelected.get()))
 		fixEquation()
 
 	def addMiscToEquation():
-		equation.insert(equation.index(tk.INSERT), entries.getEntry(MiscSelected.get()))
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), entries.getEntry(MiscSelected.get()))
 		fixEquation()
 
 	def addNumberToEquation():
-		equation.insert(equation.index(tk.INSERT), NumberSelected.get().strip() + '`')
+		equationTextInput.insert(equationTextInput.index(tk.INSERT), NumberSelected.get().strip() + '`')
 		fixEquation()
 
 	def savePresetToDB():
-		values = {"smooth":smooth.get(),"equation":equation.get().strip(), "range":[(eval(xStartTextField.get().strip())), (eval(xEndTextField.get().strip())), (eval(yStartTextField.get().strip())), (eval(yEndTextField.get().strip()))], 'resolution':resolutionValue.get(),'xPhase':xPhase.get()}
+		values = {
+			"smooth": state.smooth.get(),
+			"equation": state.equation.get().strip(),
+			"range":[
+				state.xStart,
+				state.xEndText,
+				state.yStart,
+				state.yEnd,
+			],
+			'resolution': state.resolution.get(),
+			'xPhase':xPhase.get(),
+		}
 		presetsDB[name.get().strip()] = values
 		fh.writeJson('presets.json', presetsDB)
 		presetName.set(name.get().strip())
 		updatePresets()
 
 	def loadSelectedPreset():
-		name.delete(0,tk.END)
-		name.insert(0, presetName.get())
-
+		state.name.set(presetName.get())
 		preset = presetsDB[presetName.get()]
-		smooth.set(preset['smooth'])
-		equation.delete(0,tk.END)
-		equation.insert(0,preset['equation'])
-		xStartTextField.delete(0,tk.END)
-		xStartTextField.insert(0,preset['range'][0])
-		xEndTextField.delete(0,tk.END)
-		xEndTextField.insert(0,preset['range'][1])
-		yStartTextField.delete(0,tk.END)
-		yStartTextField.insert(0,preset['range'][2])
-		yEndTextField.delete(0,tk.END)
-		yEndTextField.insert(0,preset['range'][3])
-		resolutionValue.set(preset['resolution'])
+
+		state.smooth.set(preset['smooth'])
+		state.equation.set(preset['equation'])
+		state.xStartStringValue.set(preset['range'][0])
+		state.xEndStringValue.set(preset['range'][1])
+		state.yStartStringValue.set(preset['range'][2])
+		state.yEndStringValue.set(preset['range'][3])
+		state.resolution.set(preset['resolution'])
+
 		xPhase.set(presetsDB[presetName.get()]['xPhase'])
 		updateXYPlot()
 
@@ -181,55 +224,54 @@ def main():
 		presetMenu.grid(row = 0, column = 5, sticky = tk.W)
 
 	def initPreset():
-		name.delete(0,tk.END)
-		name.insert(0, DEFAULTS.NAME)
-		smooth.set(DEFAULTS.SMOOTH)
-		equation.delete(0,tk.END)
-		equation.insert(0,DEFAULTS.EQUATION)
-		xStartTextField.delete(0,tk.END)
-		xStartTextField.insert(0,DEFAULTS.X_START)
-		xEndTextField.delete(0,tk.END)
-		xEndTextField.insert(0,DEFAULTS.X_END)
-		yStartTextField.delete(0,tk.END)
-		yStartTextField.insert(0,DEFAULTS.Y_START)
-		yEndTextField.delete(0,tk.END)
-		yEndTextField.insert(0,DEFAULTS.Y_END)
-		resolutionValue.set(DEFAULTS.RESOLUTION)
-		phaseOffsetValue.set(DEFAULTS.PHASE)
+		state.reset()
 		updateXYPlot()
 
 	def getPoints(xStart, xEnd, yStart, yEnd):
-		numPoints = resolutionValue.get()
-		xRange = abs(xEnd-xStart)
+		def np_uniform(low, high):
+			return np.random.uniform(low, high, state.resolution.get())
+		def np_randint(low, high):
+			return np.random.randint(low, high, state.resolution.get())
+
+		numPoints = state.resolution.get()
 		xpoints = np.arange(xStart, xEnd, (xEnd - xStart) / (numPoints - 1))
 		xpoints = np.append(xpoints, xEnd)
+
+		xpoints = xpoints + state.phase.get() * (xEnd - xStart)
 
 		ypoints = []
 		try:
 			x = xpoints
-			ypoints = eval(equation.get().replace('math.', 'np.'))
+			equationString = state.equation.get().replace('math.', 'np.')
+			equationString = equationString.replace('round', 'np.around')
+			equationString = equationString.replace('random.uniform', 'np_uniform')
+			equationString = equationString.replace('random.randrange', 'np_randint')
+
+			ypoints = eval(equationString)
 
 			if scaleY.get() == False:
 				ypoints = np.clip(ypoints, min(yStart, yEnd), max(yStart, yEnd))
 
 		except Exception:
-			ypoints = [0 for i in range(len(xpoints))]
+			# print(traceback.format_exc())
+			ypoints = np.empty(numPoints)
+			ypoints.fill((yEnd - yStart) * 0.5)
 			xyPlot.create_text(20,10, text = "Error", fill = 'red')
 
 		points = {'x':xpoints,'y':ypoints}
 		return points
 
 	def scaleToRange(arr, start, end):
-		scaled = np.ndarray.tolist(np.interp(arr, (min(arr), max(arr)), (start, end)))
+		scaled = np.interp(arr, (min(arr), max(arr)), (start, end))
 		# scaled = [round(i, 3) for i in scaled]
 		return scaled
 
 	def updateXYPlot():
 		try:
-			xStart = eval(xStartTextField.get().strip())
-			xEnd = eval(xEndTextField.get().strip())
-			yStart = eval(yStartTextField.get().strip())
-			yEnd = eval(yEndTextField.get().strip())
+			xStart = state.xStart
+			xEnd = state.xEnd
+			yStart = state.yStart
+			yEnd = state.yEnd
 
 			points = getPoints(xStart, xEnd, yStart, yEnd)
 
@@ -241,17 +283,17 @@ def main():
 			if scaleY.get():
 				ypoints = scaleToRange(points['y'],canvasHeight,0)
 			else:
-				ypoints = canvasHeight - (canvasHeight * (points['y'] - yStart)) / (yEnd - yStart)
+				ypoints = canvasHeight + (-canvasHeight * (points['y'] - yStart)) / (yEnd - yStart)
 
-			canvasXAxis = scaleToRange([yStart, 0, yEnd], canvasHeight, 0)
+			canvasXAxis = scaleToRange([-max(abs(yStart), abs(yEnd)), 0, max(abs(yStart), abs(yEnd))], canvasHeight, 0)
 			canvasYAxis = scaleToRange([xStart, 0, xEnd], 0, canvasWidth)
 
 			combined = np.array([xpoints, ypoints]).T.tolist()
 
 			xyPlot.delete("all")
 
-			xyPlot.create_text(canvasYAxis[1]+10, canvasHeight-10, text = yMin if scaleY.get() else eval(yStartTextField.get().strip()))
-			xyPlot.create_text(canvasYAxis[1]+10, 10, text = yMax if scaleY.get() else eval(yEndTextField.get().strip()))
+			xyPlot.create_text(canvasYAxis[1]+10, canvasHeight-10, text = yMin if scaleY.get() else state.yStart)
+			xyPlot.create_text(canvasYAxis[1]+10, 10, text = yMax if scaleY.get() else state.yEnd)
 			xyPlot.create_text(10, canvasXAxis[1]+10, text = min(points['x']))
 			xyPlot.create_text(canvasWidth-10, canvasXAxis[1]+10, text = max(points['x']))
 			xyPlot.create_line(canvasYAxis[1], canvasXAxis[0], canvasYAxis[1], canvasXAxis[2], canvasYAxis[1], canvasXAxis[1], canvasWidth, canvasXAxis[1], 0, canvasXAxis[1], fill = 'red', width = 2, smooth = False)
@@ -275,10 +317,10 @@ def main():
 			if viewUnsmoothedVal.get() == True:
 				xyPlot.create_line(combined, fill = 'darkGrey', width = 1, smooth = False)
 
-			xyPlot.create_line(combined, fill = 'Black', width = 1, smooth = smooth.get())
+			xyPlot.create_line(combined, fill = 'Black', width = 1, smooth = state.smooth.get())
 
 		except Exception as e:
-			print(e)
+			# print(traceback.format_exc())
 			xyPlot.create_text(20,10, text = "Error")
 
 	def	updateEvent(event):
@@ -286,11 +328,11 @@ def main():
 		createLFOPresetJSON()
 
 	def handleResolutionChanged(event):
-		resolutionValue.set(round(float(resolutionValue.get())))
+		state.resolution.set(round(float(state.resolution.get())))
 		updateXYPlot()
 
 	def handlePhaseChanged(event):
-		phaseOffsetValue.set(round(float(phaseOffsetValue.get()), 5))
+		state.phase.set(round(float(state.phase.get()), 5))
 		updateXYPlot()
 
 	def intEntryCallback(text):
@@ -310,40 +352,42 @@ def main():
 		ypoints = scaleToRange(points['y'],1,0)
 		assert len(xpoints) == len(ypoints)
 
-		combined = np.array([xpoints, ypoints]).T.tolist()
+		combined = np.concatenate(np.array([xpoints, ypoints]).T).tolist()
 
 		root.clipboard_clear()
-		lfo = {"name":name.get().strip(),"num_points":resolutionValue.get(),"points":combined, "powers":[0.0 for i in range(len(xpoints))],"smooth":smooth.get()}
+		lfo = {"name":state.name.get().strip(),"num_points":state.resolution.get(),"points":combined, "powers":[0.0 for i in range(len(xpoints))],"smooth":state.smooth.get()}
 		root.clipboard_append(fh.toJson(lfo))
 		return fh.toJson(lfo)
 
 	def handleEquationUpdated(var, indx, mode):
-		prettyEquationString.set(equation.get().strip().replace('math.','').replace('**','^').replace('sqrt','√').replace('random.',''))
+		prettyEquationString.set(state.equation.get().strip().replace('math.','').replace('**','^').replace('sqrt','√').replace('random.',''))
 		updateXYPlot()
 
 	def exportAsLFOPreset():
-		path = filedialog.asksaveasfile(mode = 'w', defaultextension = 'VITALLFO', initialfile = name.get().strip())
+		path = filedialog.asksaveasfile(mode = 'w', defaultextension = 'VITALLFO', initialfile = state.name.get().strip())
 		if path is not None:
 			path.write(createLFOPresetJSON())
 			path.close()
 
 	def handleShiftLeftButtonClick():
-		equation.icursor(equation.index(tk.INSERT)-1)
+		equationTextInput.icursor(equationTextInput.index(tk.INSERT)-1)
 		setFocus(1)
 
 	def handleShiftRightButtonClick():
-		equation.icursor(equation.index(tk.INSERT)+1)
+		equationTextInput.icursor(equationTextInput.index(tk.INSERT)+1)
 		setFocus(1)
 
 	def handleClearButtonClick():
-		equation.delete(0,tk.END)
+		equationTextInput.delete(0,tk.END)
 		setFocus(1)
 
 	def handleBackspaceButtonClick():
-		equation.delete(equation.index(tk.INSERT)-1,equation.index(tk.INSERT))
+		equationTextInput.delete(equationTextInput.index(tk.INSERT)-1,equationTextInput.index(tk.INSERT))
 		setFocus(1)
 
 	reg = root.register(intEntryCallback)
+
+	state = AppState()
 
 	# Header
 	header = ttk.Frame(main)
@@ -353,11 +397,11 @@ def main():
 	ttk.Label(header, text = "  Smooth: ") .grid(row = 0, column = 2, sticky = tk.E)
 	ttk.Label(header, text = "  Preset: ") .grid(row = 0, column = 4, sticky = tk.E)
 
-	name = ttk.Entry(header, width = 40) # SET THE LFO NAME
-	name.grid(row = 0, column = 1, sticky = tk.W)
+	nameTextInput = ttk.Entry(header, width = 40, textvariable=state.name) # SET THE LFO NAME
+	nameTextInput.grid(row = 0, column = 1, sticky = tk.W)
 
-	smooth = tk.BooleanVar() #ENABLE SMOOTHING
-	ttk.Checkbutton(header, var = smooth) .grid(row = 0, column = 3, sticky = tk.W)
+	# smooth = tk.BooleanVar() #ENABLE SMOOTHING
+	ttk.Checkbutton(header, var = state.smooth) .grid(row = 0, column = 3, sticky = tk.W)
 
 	presetName = tk.StringVar() # LOAD PRESETS
 	presetMenu = ttk.OptionMenu(header, presetName, presetOptions[0], *presetOptions, command = lambda e: loadSelectedPreset())
@@ -430,36 +474,31 @@ def main():
 	numAddButton.grid(row = 3, column = 5, sticky = tk.NSEW, padx = 5)
 	numAddButtonTT = Tooltip(numAddButton, "Add to raw equation at index")
 
-	resolutionValue = tk.IntVar()
-	"""Number of discrete points in wave"""
-
 	ttk.Label(adder, text = "Resolution: ") .grid(row = 4, column = 0, sticky = tk.E)
-	resolution = ttk.Scale(adder,from_ = 4, to = 100, orient = 'horizontal', variable = resolutionValue, value = 10, command = handleResolutionChanged)
-	resolution.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
-	ttk.Label(adder, textvariable = resolutionValue) .grid(row = 4, column = 5, sticky = tk.W)
-
-	phaseOffsetValue = tk.DoubleVar()
+	resolutionSlider = ttk.Scale(adder,from_ = 4, to = 100, orient = 'horizontal', variable = state.resolution, value = 10, command = handleResolutionChanged)
+	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
+	ttk.Label(adder, textvariable = state.resolution) .grid(row = 4, column = 5, sticky = tk.W)
 
 	ttk.Label(adder, text = "x Phase:" ) .grid(row = 7, column = 0, sticky = tk.E)
 
-	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = phaseOffsetValue, value = 0, command = handlePhaseChanged)
+	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = state.phase, value = 0, command = handlePhaseChanged)
 	xPhase.grid(row = 7, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
 	xPhase.bind('<Double-1>', lambda event: xPhase.set(0))
-	ttk.Label(adder, textvariable = phaseOffsetValue) .grid(row = 7, column = 5, sticky = tk.W)
+	ttk.Label(adder, textvariable = state.phase) .grid(row = 7, column = 5, sticky = tk.W)
 
 	ttk.Label(adder, text = "x Start: ") .grid(row = 5, column = 0, sticky = tk.E)
 	ttk.Label(adder, text = "x End: ") .grid(row = 5, column = 2, sticky = tk.E)
-	xStartTextField = ttk.Entry(adder, width = 10)
+	xStartTextField = ttk.Entry(adder, width = 10, textvariable=state.xStartStringValue)
 	xStartTextField.grid(row = 5, column = 1, sticky = tk.W)
 
-	xEndTextField = ttk.Entry(adder, width = 10)
+	xEndTextField = ttk.Entry(adder, width = 10, textvariable=state.xEndStringValue)
 	xEndTextField.grid(row = 5, column = 3, sticky = tk.W)
 
 	ttk.Label(adder, text = "y Start: ") .grid(row = 6, column = 0, sticky = tk.E)
 	ttk.Label(adder, text = "y End: ") .grid(row = 6, column = 2, sticky = tk.E)
-	yStartTextField = ttk.Entry(adder, width = 10)
+	yStartTextField = ttk.Entry(adder, width = 10, textvariable=state.yStartStringValue)
 	yStartTextField.grid(row = 6, column = 1, sticky = tk.W)
-	yEndTextField = ttk.Entry(adder, width = 10)
+	yEndTextField = ttk.Entry(adder, width = 10, textvariable=state.yEndStringValue)
 	yEndTextField.grid(row = 6, column = 3, sticky = tk.W)
 
 	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
@@ -475,11 +514,10 @@ def main():
 
 	ttk.Label(equater, text = "Raw Equation: ") .grid(row = 0, column = 0, sticky = tk.NSEW)
 
-	equationString = tk.StringVar()
-	equation = ttk.Entry(equater, width = 95, textvariable = equationString)
-	equation.grid(row = 1, column = 0, sticky = tk.W, ipady = 5)
+	equationTextInput = ttk.Entry(equater, width = 95, textvariable = state.equation)
+	equationTextInput.grid(row = 1, column = 0, sticky = tk.W, ipady = 5)
 
-	equationString.trace_add('write',handleEquationUpdated)
+	state.equation.trace_add('write', handleEquationUpdated)
 
 	eqButtons = ttk.Frame(equater)
 	eqButtons.grid(row = 2, column = 0, sticky = tk.N)
@@ -536,14 +574,14 @@ def main():
 	# status.grid(row = 1, column = 0, sticky = tk.NSEW, ipady = 3)
 
 	def setFocus(event):
-		equation.focus_set()
+		equationTextInput.focus_set()
 	def endFocus(event):
 		root.focus_set()
 	# KEYBONDINGS
 	# root.bind("<Return>", updateEvent)
 	root.bind("<ButtonRelease-1>", updateEvent)
 	adder.bind("<Enter>", setFocus)
-	equation.bind("<Enter>",setFocus)
+	equationTextInput.bind("<Enter>",setFocus)
 	eqButtons.bind("<Enter>",setFocus)
 	adder.bind("<Leave>", endFocus)
 

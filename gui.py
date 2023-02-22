@@ -9,6 +9,7 @@ import entries
 import soundfile as sf
 # import traceback
 
+PADDING = 2
 
 class AppState:
 	def __init__(self):
@@ -352,21 +353,22 @@ def main():
 
 	def intEntryCallback(text):
 		allowedChars = "1234567890-+/*."
-		valid = True
 		for i in text:
 			if i not in allowedChars:
-				valid = False
-		if valid:
-			return True
-		else:
-			return False
+				return False
+		return True
 
-	def serializeIntoGHOSTLFOPreset():
+	def normalizeXYPlotToLFOPreset():
 		points = getPoints(state.resolution.get())
 		xpoints = scaleToRange(points['x'],0,1)
 		ypoints = scaleToRange(points['y'],1,0)
 		assert len(xpoints) == len(ypoints)
 
+		return xpoints, ypoints
+
+	def serializeIntoGHOSTLFOPreset():
+
+		xpoints, ypoints = normalizeXYPlotToLFOPreset()
 		combined = np.array([xpoints, ypoints]).T
 
 		pointObjects = [{'x': x, 'y': y, 'skew': 0.5} for x, y in combined]
@@ -381,11 +383,8 @@ def main():
 		return fh.toJson(data)
 
 	def serializeIntoVitalLFOPreset():
-		points = getPoints(state.resolution.get())
-		xpoints = scaleToRange(points['x'],0,1)
-		ypoints = scaleToRange(points['y'],1,0)
-		assert len(xpoints) == len(ypoints)
-
+		
+		xpoints, ypoints = normalizeXYPlotToLFOPreset()
 		combined = np.concatenate(np.array([xpoints, ypoints]).T).tolist()
 
 		root.clipboard_clear()
@@ -412,7 +411,7 @@ def main():
 			filetypes=(
 				("GHOST", "*.json"),
 				("Vital", "*.vitallfo")),
-			defaultextension = 'JSON', # GHOST FTW!
+			#defaultextension = 'JSON', # GHOST FTW!
 			initialfile = state.name.get().strip())
 		if file is not None:
 			filename = file.name.lower()
@@ -429,7 +428,7 @@ def main():
 				("FLAC", "*.flac"),
 				("AIFF", "*.aiff"),
 				("WAV", "*.wav"),),
-			defaultextension = 'FLAC',
+			# defaultextension = '.flac',
 			initialfile = state.name.get().strip())
 		if file is not None:
 			filename = file.name
@@ -472,14 +471,12 @@ def main():
 	header.grid(row = 0, column = 0)
 
 	ttk.Label(header, text = "LFO Name: ") .grid(row = 0, column = 0, sticky = tk.E)
-	ttk.Label(header, text = "  Smooth: ") .grid(row = 0, column = 2, sticky = tk.E)
 	ttk.Label(header, text = "  Preset: ") .grid(row = 0, column = 4, sticky = tk.E)
 
 	nameTextInput = ttk.Entry(header, width = 40, textvariable=state.name) # SET THE LFO NAME
 	nameTextInput.grid(row = 0, column = 1, sticky = tk.W)
 
 	# smooth = tk.BooleanVar() #ENABLE SMOOTHING
-	ttk.Checkbutton(header, var = state.smooth) .grid(row = 0, column = 3, sticky = tk.W)
 
 	presetName = tk.StringVar() # LOAD PRESETS
 	presetMenu = ttk.OptionMenu(header, presetName, presetOptions[0], *presetOptions, command = lambda e: loadSelectedPreset())
@@ -498,18 +495,21 @@ def main():
 	initPresetButton.grid(row = 0, column = 9, sticky = tk.W)
 	initPresetButtonTT = Tooltip(initPresetButton, 'Initialize a new preset')
 
-	ttk.Separator(main, orient = 'horizontal') .grid(row = 1, column = 0, sticky = tk.NSEW, pady = 10)
+	# ttk.Separator(main, orient = 'horizontal') .grid(row = 1, column = 0, sticky = tk.NSEW, pady = PADDING)
 
 	# Adder
-	adder = ttk.Frame(main)
-	adder.grid(row = 2, column = 0, sticky = tk.NS)
+	adderFrame = ttk.LabelFrame(main)
+	adder = ttk.Frame(adderFrame)
+	adderFrame.grid(row=2, column=0, sticky = tk.NSEW)
+	adderFrame.columnconfigure(1, weight=2)
+	adder.grid(row = 0, column = 0, sticky = tk.N, columnspan=2)
 
 	# TRIG
 	ttk.Label(adder, text = "Trig: ") .grid(row = 0, column = 0, sticky = tk.W)
 	trigSelected = tk.StringVar()
 	ttk.OptionMenu(adder, trigSelected, trigOptions[0], *trigOptions) .grid(row = 1, column = 0, sticky = tk.NSEW)
 	trigAddButton = ttk.Button(adder, text = "Add", command = addTrigToEquation)
-	trigAddButton.grid(row = 1, column = 1, sticky = tk.NSEW, padx = 5)
+	trigAddButton.grid(row = 1, column = 1, sticky = tk.W, padx = PADDING)
 	trigAddButtonTT = Tooltip(trigAddButton, "Add to raw equation at index")
 
 	# Operators
@@ -517,7 +517,7 @@ def main():
 	OperatorSelected = tk.StringVar()
 	ttk.OptionMenu(adder, OperatorSelected, operatorOptions[0], *operatorOptions) .grid(row = 1, column = 2, sticky = tk.NSEW)
 	operatorsAddButton = ttk.Button(adder, text = "Add", command = addOperatorToEquation)
-	operatorsAddButton.grid(row = 1, column = 3, sticky = tk.NSEW, padx = 5)
+	operatorsAddButton.grid(row = 1, column = 3, sticky = tk.NSEW, padx = PADDING)
 	operatorsAddButtonTT = Tooltip(operatorsAddButton, "Add to raw equation at index")
 
 	# Symbols
@@ -525,7 +525,7 @@ def main():
 	SymbolSelected = tk.StringVar()
 	ttk.OptionMenu(adder, SymbolSelected, symbolOptions[0], *symbolOptions) .grid(row = 1, column = 4, sticky = tk.NSEW)
 	symbolsAddButton = ttk.Button(adder, text = "Add", command = addSymbolToEquation)
-	symbolsAddButton.grid(row = 1, column = 5, sticky = tk.NSEW, padx = 5)
+	symbolsAddButton.grid(row = 1, column = 5, sticky = tk.NSEW, padx = PADDING)
 	symbolsAddButtonTT = Tooltip(symbolsAddButton, "Add to raw equation at index")
 
 	# Variables
@@ -533,7 +533,7 @@ def main():
 	VariableSelected = tk.StringVar()
 	ttk.OptionMenu(adder, VariableSelected, variableOptions[0], *variableOptions) .grid(row = 3, column = 0, sticky = tk.NSEW)
 	varAddButton = ttk.Button(adder, text = "Add", command = addVariableToEquation)
-	varAddButton.grid(row = 3, column = 1, sticky = tk.NSEW, padx = 5)
+	varAddButton.grid(row = 3, column = 1, sticky = tk.NSEW, padx = PADDING)
 	varAddButtonTT = Tooltip(varAddButton, "Add to raw equation at index")
 
 	# Misc
@@ -541,7 +541,7 @@ def main():
 	MiscSelected = tk.StringVar()
 	ttk.OptionMenu(adder, MiscSelected, miscOptions[0], *miscOptions) .grid(row = 3, column = 2, sticky = tk.NSEW)
 	miscAddButton = ttk.Button(adder, text = "Add", command = addMiscToEquation)
-	miscAddButton.grid(row = 3, column = 3, sticky = tk.NSEW, padx = 5)
+	miscAddButton.grid(row = 3, column = 3, sticky = tk.NSEW, padx = PADDING)
 	miscAddButtonTT = Tooltip(miscAddButton, "Add to raw equation at index")
 
 	# Number
@@ -549,18 +549,18 @@ def main():
 	NumberSelected = ttk.Entry(adder, width = 16)
 	NumberSelected.grid(row = 3, column = 4, sticky = tk.NSEW)
 	numAddButton = ttk.Button(adder, text = "Add", command = addNumberToEquation)
-	numAddButton.grid(row = 3, column = 5, sticky = tk.NSEW, padx = 5)
+	numAddButton.grid(row = 3, column = 5, sticky = tk.NSEW, padx = PADDING)
 	numAddButtonTT = Tooltip(numAddButton, "Add to raw equation at index")
 
 	ttk.Label(adder, text = "Resolution: ") .grid(row = 4, column = 0, sticky = tk.E)
 	resolutionSlider = ttk.Scale(adder,from_ = 4, to = 100, orient = 'horizontal', variable = state.resolution, value = 10, command = handleResolutionChanged)
-	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
+	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
 	ttk.Label(adder, textvariable = state.resolution) .grid(row = 4, column = 5, sticky = tk.W)
 
 	ttk.Label(adder, text = "x Phase Offset:" ) .grid(row = 7, column = 0, sticky = tk.E)
 
 	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = state.phase, value = 0, command = handlePhaseChanged)
-	xPhase.grid(row = 7, column = 1, columnspan = 4, sticky = tk.NSEW, pady = 5, padx = 5)
+	xPhase.grid(row = 7, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
 	xPhase.bind('<Double-1>', lambda event: xPhase.set(0))
 	ttk.Label(adder, textvariable = state.phase) .grid(row = 7, column = 5, sticky = tk.W)
 
@@ -610,7 +610,7 @@ def main():
 	scaleY.set(0)
 	ttk.Checkbutton(eqButtons, variable = scaleY) .grid(row = 0, column = 5, sticky = tk.W)
 
-	ttk.Separator(main, orient = 'horizontal') .grid(row = 5, column = 0, sticky = tk.NSEW, pady = 10)
+	# ttk.Separator(main, orient = 'horizontal') .grid(row = 5, column = 0, sticky = tk.NSEW, pady = PADDING)
 
 	# Previewer
 	previewer = ttk.Frame(main)
@@ -623,30 +623,36 @@ def main():
 	prettyEquation = ttk.Entry(previewer, textvariable=prettyEquationString, state='readonly', width=108)
 	prettyEquation.grid(row = 0, column = 0, sticky = tk.N, columnspan=8)
 
-	prettyEqScroll = ttk.Scrollbar(previewer, orient='horizontal', command=prettyEquation.xview, )
+	prettyEqScroll = ttk.Scrollbar(previewer, orient='horizontal', command=prettyEquation.xview)
 	prettyEquation.config(xscrollcommand=prettyEqScroll.set)
-	prettyEqScroll.grid(row=1,column=0,sticky=tk.NSEW,columnspan=8)
+	prettyEqScroll.grid(row=1,column=0,sticky=tk.NSEW,columnspan=2)
 
 	xyPlot = tk.Canvas(previewer, width = canvasWidth, height = canvasHeight, bg = 'white')
-	xyPlot.grid(row = 2, column = 0, sticky = tk.NSEW, columnspan = 7)
+	xyPlot.grid(row = 2, column = 0, sticky = tk.N)
 
-	updatePlotButton = ttk.Button(previewer, text = "Update", command = updateXYPlot)
-	updatePlotButton.grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,10))
+	XYPlotOptions = ttk.Frame(previewer)
+	XYPlotOptions.grid(row=2,column=1,sticky=tk.NSEW)
+
+	updatePlotButton = ttk.Button(XYPlotOptions, text = "Regenerate Plot", command = updateXYPlot)
+	updatePlotButton.grid(row = 0, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
 	updatePlotButtonTT = Tooltip(updatePlotButton, "Force updates the x/y plot")
 
-	ttk.Button(previewer, text = "Copy preset to clipboard", command = copyLFOPresetToClipboard) .grid(row = 3, column = 1, sticky = tk.NSEW, pady = (0,10))
-	ttk.Button(previewer, text = "Export preset", command = exportAsLFOPreset) .grid(row = 3, column = 2, sticky = tk.NSEW, pady = (0,10))
-	ttk.Button(previewer, text = "Export wavetable", command = exportAsWavetable) .grid(row = 3, column = 3, sticky = tk.NSEW, pady = (0,10))
+	ttk.Button(XYPlotOptions, text = "Copy Vital LFO", command = copyLFOPresetToClipboard) .grid(row = 1, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
+	ttk.Button(XYPlotOptions, text = "Export LFO File", command = exportAsLFOPreset) .grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
+	ttk.Button(XYPlotOptions, text = "Export Waveform", command = exportAsWavetable) .grid(row = 4, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
 
-	ttk.Label(previewer, text = "View Points: ") .grid(row = 3, column = 4, sticky = tk.E)
+	ttk.Label(XYPlotOptions, text = "View Points: ") .grid(row = 5, column = 0, sticky = tk.E)
 	viewPoints = tk.BooleanVar()
 	viewPoints.set(True)
-	ttk.Checkbutton(previewer, var = viewPoints) .grid(row = 3, column = 5, sticky = tk.W)
+	ttk.Checkbutton(XYPlotOptions, var = viewPoints) .grid(row = 5, column = 1, sticky = tk.W)
 
-	ttk.Label(previewer, text = "View Unsmoothed: ") .grid(row = 3, column = 6, sticky = tk.E)
+	ttk.Label(XYPlotOptions, text = "View Unsmoothed: ") .grid(row = 6, column = 0, sticky = tk.E)
 	viewUnsmoothedVal = tk.BooleanVar()
 	viewUnsmoothedVal.set(True)
-	ttk.Checkbutton(previewer, var = viewUnsmoothedVal) .grid(row = 3, column = 7, sticky = tk.W)
+	ttk.Checkbutton(XYPlotOptions, var = viewUnsmoothedVal) .grid(row = 6, column = 1, sticky = tk.W)
+
+	ttk.Label(XYPlotOptions, text = "Smooth: ") .grid(row = 7, column = 0, sticky = tk.E)
+	ttk.Checkbutton(XYPlotOptions, var = state.smooth) .grid(row = 7, column = 1, sticky = tk.W)
 
 	# StatusBar
 	# status = ttk.Label(root2, text = 'Welcome to EquaFO!', borderwidth = 1, relief = "sunken")

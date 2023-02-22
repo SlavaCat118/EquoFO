@@ -2,51 +2,31 @@
 
 An equation based LFO generator for the GHOST and Vital synthesizers
 
-# Basic HowTo:
-
--   Create your equation by adding functions to the Raw Equation box
--   This can be done by pressing the 'Add' buttons next to the function dropdowns
--   Press Copy LFO to Clipboard, or Export LFO to file, to save your LFO
-
 # Advanced
 
 ## The Header
-
--   The header is at the very top of the application and controls the name of the LFO, smoothing, and presets
--   The buttons to the left of smoothing are for preset manipulation, their function can be seen in the status bar while hovering
+![image](https://user-images.githubusercontent.com/71950453/220758147-e1c1dbee-1a4a-48ec-ae82-1fb1480b161e.png)
+- Can be used to define the LFO Name and manage LFO presets
+- Hover on buttons to see their function
 
 ## The Equation Generator
+![image](https://user-images.githubusercontent.com/71950453/220758868-79a7b69b-3dcc-4a39-83dc-6fde47a47846.png)
+- Expand drop-down menues to select a different function to use, press **Add** to insert it into the **Raw Equation** Box
+- The **Raw Equation** box is able to be typed to manually and supports all functions from python, numpy (np), and random
+- **Resolution** controls how many points will be sampled for the plot
+- **xStart** and **xEnd** control which x-values will be sampled
+- **yStart** and **yEnd** control which y-values will be used
+- **xPhase** nudges the sampled points in either direction
 
--   The equation generator is directly beneath the header and makes equation writing fast, efficient, and user-friendly
--   Simply select from the dropdown menu the function you would like to add, and then press the 'Add' button next to it.
--   The 'Add' button will add the function to wherever the cursor is in the Equation Box
+## The Equation Viewer
 
-## Graph Settings
-
--   The graph settings below the Equation Generator are for selecting where and how the equation will render
--   Resolution controlls how many points will be sampled in the given x domain, defined by x Start and x End
--   x Start and x End control domain, while y Start and y End control the range of the function. These can be basic math functions such as "3+1" or "1218932657/329865"
--   x Phase is for making minor adjustments to the graph, nudging the x coords -1 to 1 units over
-
-## Raw Equation
-
--   The Raw Equation is where the Equation Generator puts the functions
--   This can be typed directly into, if you know what your doing, or can be navigated with the buttons below
--   EquoFo supports most functions from the following python libraries: "math","numpy","random". If you have python knowledge, you can use almost any function in the equation generator.
--   Scale Y to Fit will set the y Start and y End to the min and max of the equation, keeping everything in range
-
-## The Previewer
-
--   The previewer previews the Raw Equation
--   Above it is a formated version of the Raw Equation
--   Below are a few buttons:
--   Update - reloads the graph
--   Copy preset to Clipboard - copies the LFO to clipboard so you can paste it directly into Vital. GHOST not supported.
--   Export preset - Exports the points in either GHOST or Vital LFO preset formats
--   Export wavetable - Exports the wave as a 2048 point audio file. Supports `.flac`, `.aiff` and `.wav`
--   View Points - Toggles display of points of the graph. Smoothing not applied
--   View Unsmoothed - Toggles display of a second graph with the unsmoothed points
-
-## Note
-
-EquoFo was compiled with pyinstaller, so that means Windows Defender will detect it as a Trojan (thanks malware devs!). Run it if you like, or install python to run from source.
+![image](https://user-images.githubusercontent.com/71950453/220760142-b99a4a1d-f0a7-460d-86a9-d4ba30485eb8.png)
+- The Equation Viewer plots the **Raw Equation** given the bounds put out in xStart/End and yStart/End
+  - If **Scale Y to fit** is checked, y-bounds will automatically be set
+- **View Points** toggles point displays on the plot
+- **View Unsmoothed** displays the unsmoothed lines 
+- **Smooth** displays a smoothed curve, an exported smooth LFO will look slightly different
+- **Regenerate Plot** replots the equation, usefull for rerolling things involving random numbers
+- **Copy Vital LFO** copies the currently ploted points into a Vital LFO format allowing it to be directly pasted into Vital
+- **Export LFO File** exports the currently ploted points to either a GHOST or Vital LFO file
+- **Export Waveform** renders the equation to a 2048 point resolution and exports it to a file. Supports `.flac`, `.aiff` and `.wav`

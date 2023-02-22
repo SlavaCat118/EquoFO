@@ -32,7 +32,9 @@ def getEntry(text):
 		"ceil(𝑥)":"math.ceil( ` )",
 		"floor(𝑥)":"math.floor( ` )",
 		"abs(𝑥)":"abs( ` )",
-		"logn(𝑥)":"math.log10( ` )",
+		"loge(𝑥)":"math.log( ` )",
+		"log2(𝑥)":"math.log2( ` )",
+		"log10(𝑥)":"math.log10( ` )",
 		"random(start, stop)":"random.randrange(`,9)",
 		"uniform(start, stop)":"random.uniform(`,9)",
 		"round(𝑥,n)":"round(x,`)"

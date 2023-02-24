@@ -8,7 +8,7 @@ from scipy import special
 import random
 import entries
 import soundfile as sf
-# import traceback
+import traceback
 
 PADDING = 2
 
@@ -276,21 +276,30 @@ def main():
 		xpoints = np.append(xpoints, xEnd)
 
 		ypoints = []
+		err = None
 		try:
 			x = xpoints + state.phase.get() * (xEnd - xStart)
 
 			ypoints = execute_equation_for_list(x)
 
+			# raising a negative number to the power of a negative number can produce complex numbers
+			if np.any(np.iscomplex(ypoints)):
+				# cannot plot complex numbers for Y axis on our graph
+				raise ValueError("Calculated value is a complex number.")
+
+			# functions like log, acos etc will often produce NaN for values like -2
+			# this will set them to 0
+			ypoints = np.nan_to_num(ypoints)
+
 			if scaleY.get() == False:
 				ypoints = np.clip(ypoints, min(yStart, yEnd), max(yStart, yEnd))
 
 		except Exception:
-			# print(traceback.format_exc())
+			err = traceback.format_exc()
 			ypoints = np.empty(numPoints)
 			ypoints.fill((yEnd - yStart) * 0.5)
-			xyPlot.create_text(20,10, text = "Error", fill = 'red')
 
-		points = {'x':xpoints,'y':ypoints}
+		points = {'x': xpoints,'y': ypoints, 'error': err}
 		return points
 
 	def scaleToRange(arr, start, end):
@@ -300,12 +309,24 @@ def main():
 
 	def updateXYPlot():
 		try:
+			# clear canvas
+			xyPlot.delete("all")
+
+			points = getPoints(state.resolution.get())
+			if points['error'] is not None:
+				lines = points['error'].split('\n')
+				lines.insert(0, "Found error in equation \"%s\"" % state.equation.get())
+				lines.insert(1, "")
+				y = 10
+				for line in lines:
+					xyPlot.create_text(20,y, text=line, fill="red", anchor=tk.NW)
+					y += 12
+				return
+
 			xStart = state.xStart
 			xEnd = state.xEnd
 			yStart = state.yStart
 			yEnd = state.yEnd
-
-			points = getPoints(state.resolution.get())
 
 			xpoints = scaleToRange(points['x'],0,canvasWidth)
 
@@ -328,9 +349,6 @@ def main():
 			plane0X = rescale(0, xMin, xMax, 0, canvasWidth)
 
 			combined = np.array([xpoints, ypoints]).T.tolist()
-
-			# clear canvas
-			xyPlot.delete("all")
 
 			# draw axis
 			xyPlot.create_line(0, plane0Y, canvasWidth, plane0Y, fill = 'red', width = 2, smooth = False)

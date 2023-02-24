@@ -4,12 +4,32 @@ from tkinter import filedialog
 import fileHandler as fh
 import math
 import numpy as np
+from scipy import special
 import random
 import entries
 import soundfile as sf
 # import traceback
 
 PADDING = 2
+
+# support for all math.{name} functions
+np.tau = math.tau
+np.fsum = np.sum
+np.acos = np.arccos
+np.acosh = np.arccosh
+np.asin = np.arcsin
+np.asinh = np.arcsinh
+np.atan = np.arctan
+np.atanh = np.arctanh
+np.atan2 = np.arctan2
+np.pow = np.power
+np.factorial = special.factorial
+np.gamma = special.gamma
+np.lgamma = special.gammaln
+np.erf = special.erf
+np.erfc = special.erfc
+np.perm = special.perm
+np.comb = special.comb
 
 class AppState:
 	def __init__(self):
@@ -232,7 +252,9 @@ def main():
 			return np.random.uniform(low, high, state.resolution.get())
 		def np_randint(low, high):
 			return np.random.randint(low, high, state.resolution.get())
-		equationString = state.equation.get().replace('math.', 'np.')
+		equationString = state.equation.get()
+		equationString = equationString.replace('math.', 'np.')
+		equationString = equationString.replace('numpy.', 'np.')
 		equationString = equationString.replace('round', 'np.around')
 		equationString = equationString.replace('random.uniform', 'np_uniform')
 		equationString = equationString.replace('random.randrange', 'np_randint')
@@ -383,7 +405,6 @@ def main():
 		return fh.toJson(data)
 
 	def serializeIntoVitalLFOPreset():
-		
 		xpoints, ypoints = normalizeXYPlotToLFOPreset()
 		combined = np.concatenate(np.array([xpoints, ypoints]).T).tolist()
 

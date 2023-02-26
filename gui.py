@@ -9,6 +9,7 @@ import random
 import entries
 import soundfile as sf
 import traceback
+import re
 
 PADDING = 2
 
@@ -35,36 +36,36 @@ class AppState:
 	def __init__(self):
 		self.name = tk.StringVar()
 		self.equation = tk.StringVar()
-		self.smooth = tk.BooleanVar()
-		self.xStartStringValue = tk.StringVar()
-		self.xEndStringValue = tk.StringVar()
-		self.yStartStringValue = tk.StringVar()
-		self.yEndStringValue = tk.StringVar()
+		self.smooth = tk.BooleanVar() # enables smoothing on x/y plot
+		self.xStart = tk.StringVar()
+		self.xEnd = tk.StringVar()
+		self.yStart = tk.StringVar()
+		self.yEnd = tk.StringVar()
 		self.resolution = tk.IntVar()
 		self.phase = tk.DoubleVar()
+		self.z = tk.DoubleVar() # z position (x/y/z axis)
+		self.numFrames = tk.IntVar() # num wavetable frames (1-256)
 		self.reset()
 	def reset(self):
 		self.name.set("New LFO")
 		self.equation.set("math.sin(x)")
 		self.smooth.set(False)
-		self.xStartStringValue.set(-math.pi)
-		self.xEndStringValue.set(math.pi)
-		self.yStartStringValue.set(-1)
-		self.yEndStringValue.set(1)
+		self.xStart.set(-math.pi)
+		self.xEnd.set(math.pi)
+		self.yStart.set(-1)
+		self.yEnd.set(1)
 		self.resolution.set(17)
 		self.phase.set(0)
-	@property
-	def xStart(self):
-		return float(self.xStartStringValue.get())
-	@property
-	def xEnd(self):
-		return float(self.xEndStringValue.get())
-	@property
-	def yStart(self):
-		return float(self.yStartStringValue.get())
-	@property
-	def yEnd(self):
-		return float(self.yEndStringValue.get())
+		self.z.set(0)
+		self.numFrames.set(256)
+	def getXStart(self):
+		return float(self.xStart.get())
+	def getXEnd(self):
+		return float(self.xEnd.get())
+	def getYStart(self):
+		return float(self.yStart.get())
+	def getYEnd(self):
+		return float(self.yEnd.get())
 
 
 # https://stackoverflow.com/questions/3221956/how-do-i-display-tooltips-in-tkinter
@@ -103,7 +104,7 @@ class Tooltip(object):
     def showtip(self, event=None):
         x = y = 0
         x, y, cx, cy = self.widget.bbox("insert")
-        x += self.widget.winfo_rootx() + self.widget.winfo_width() - 25
+        x += self.widget.winfo_rootx() + self.widget.winfo_width() - 5
         y += self.widget.winfo_rooty() - 6
         # creates a toplevel window
         self.tw = tk.Toplevel(self.widget)
@@ -203,32 +204,38 @@ def main():
 			"smooth": state.smooth.get(),
 			"equation": state.equation.get().strip(),
 			"range":[
-				state.xStart,
-				state.xEndText,
-				state.yStart,
-				state.yEnd,
+				state.getXStart(),
+				state.getXEnd(),
+				state.getYStart(),
+				state.getYEnd(),
 			],
 			'resolution': state.resolution.get(),
-			'xPhase':xPhase.get(),
+			'xPhase':state.phase.get(),
+			'zPosition': state.z.get(),
+			'numFrames': state.numFrames.get(),
 		}
-		presetsDB[name.get().strip()] = values
+		presetsDB[state.name.get().strip()] = values
 		fh.writeJson('presets.json', presetsDB)
-		presetName.set(name.get().strip())
+		presetName.set(state.name.get().strip())
 		updatePresets()
 
 	def loadSelectedPreset():
-		state.name.set(presetName.get())
-		preset = presetsDB[presetName.get()]
+		key = presetName.get()
+		preset = presetsDB[key]
 
+		state.name.set(key)
 		state.smooth.set(preset['smooth'])
 		state.equation.set(preset['equation'])
-		state.xStartStringValue.set(preset['range'][0])
-		state.xEndStringValue.set(preset['range'][1])
-		state.yStartStringValue.set(preset['range'][2])
-		state.yEndStringValue.set(preset['range'][3])
+		state.xStart.set(preset['range'][0])
+		state.xEnd.set(preset['range'][1])
+		state.yStart.set(preset['range'][2])
+		state.yEnd.set(preset['range'][3])
 		state.resolution.set(preset['resolution'])
 
-		xPhase.set(presetsDB[presetName.get()]['xPhase'])
+		xPhase.set(preset['xPhase'])
+		zScale.set(preset.get('zPosition', 0))
+		numFramesScale.set(preset.get('numFrames', 256))
+
 		updateXYPlot()
 
 	def deletePresetFromDB():
@@ -247,7 +254,15 @@ def main():
 		state.reset()
 		updateXYPlot()
 
-	def execute_equation_for_list(x):
+	def clampZToNumFrames(z):
+		numFrames = state.numFrames.get()
+		if numFrames > 1:
+			fraction = 1 / (numFrames - 1)
+			# round to nearest multiple of fraction
+			return round(z / fraction) * fraction
+		return 0
+
+	def executeEquationForList(x, z):
 		def np_uniform(low, high):
 			return np.random.uniform(low, high, state.resolution.get())
 		def np_randint(low, high):
@@ -266,11 +281,11 @@ def main():
 	# 	y = eval(equationString)
 	# 	return y
 
-	def getPoints(numPoints):
-		xStart = state.xStart
-		xEnd = state.xEnd
-		yStart = state.yStart
-		yEnd = state.yEnd
+	def getPoints(numPoints, z):
+		xStart = state.getXStart()
+		xEnd = state.getXEnd()
+		yStart = state.getYStart()
+		yEnd = state.getYEnd()
 
 		xpoints = np.arange(xStart, xEnd, (xEnd - xStart) / (numPoints - 1))
 		xpoints = np.append(xpoints, xEnd)
@@ -280,7 +295,7 @@ def main():
 		try:
 			x = xpoints + state.phase.get() * (xEnd - xStart)
 
-			ypoints = execute_equation_for_list(x)
+			ypoints = executeEquationForList(x, z)
 
 			# raising a negative number to the power of a negative number can produce complex numbers
 			if np.any(np.iscomplex(ypoints)):
@@ -312,7 +327,8 @@ def main():
 			# clear canvas
 			xyPlot.delete("all")
 
-			points = getPoints(state.resolution.get())
+			z = clampZToNumFrames(state.z.get())
+			points = getPoints(state.resolution.get(),  z)
 			if points['error'] is not None:
 				lines = points['error'].split('\n')
 				lines.insert(0, "Found error in equation \"%s\"" % state.equation.get())
@@ -323,10 +339,10 @@ def main():
 					y += 12
 				return
 
-			xStart = state.xStart
-			xEnd = state.xEnd
-			yStart = state.yStart
-			yEnd = state.yEnd
+			xStart = state.getXStart()
+			xEnd = state.getXEnd()
+			yStart = state.getYStart()
+			yEnd = state.getYEnd()
 
 			xpoints = scaleToRange(points['x'],0,canvasWidth)
 
@@ -337,7 +353,7 @@ def main():
 
 			if scaleY.get():
 				ypoints = scaleToRange(points['y'],canvasHeight, 0)
-				plane0Y = rescale(0, yMin, yMax, canvasHeight, 0)
+				plane0Y = rescale(0, yMin, yMax, 0, canvasHeight)
 				yLimTop = yMax
 				yLimBottom = yMin
 			else:
@@ -387,8 +403,16 @@ def main():
 		state.resolution.set(round(float(state.resolution.get())))
 		updateXYPlot()
 
+	def handleNumFramesChanged(event):
+		state.numFrames.set(round(float(state.numFrames.get())))
+		updateXYPlot()
+
 	def handlePhaseChanged(event):
 		state.phase.set(round(float(state.phase.get()), 5))
+		updateXYPlot()
+
+	def handleZPositionChanged(event):
+		state.z.set(round(float(state.z.get()), 5))
 		updateXYPlot()
 
 	def intEntryCallback(text):
@@ -399,9 +423,12 @@ def main():
 		return True
 
 	def normalizeXYPlotToLFOPreset():
-		points = getPoints(state.resolution.get())
+		z = clampZToNumFrames(state.z.get())
+		points = getPoints(state.resolution.get(), z)
+		if 'error' in points:
+			return ([0,0], [0,0])
 		xpoints = scaleToRange(points['x'],0,1)
-		ypoints = scaleToRange(points['y'],1,0)
+		ypoints = scaleToRange(points['y'],0,1)
 		assert len(xpoints) == len(ypoints)
 
 		return xpoints, ypoints
@@ -460,6 +487,10 @@ def main():
 				file.write(serializeIntoVitalLFOPreset())
 			file.close()
 
+	def equationUsesZ():
+		match = re.search(r'[^a-z]*z[^a-z]*', state.equation.get())
+		return match is not None
+
 	def exportAsWavetable():
 		file = filedialog.asksaveasfile(
 			mode = 'w',
@@ -474,8 +505,24 @@ def main():
 			filename_lower = filename.lower()
 			file.close()
 
-			points = getPoints(2048)
-			data = scaleToRange(points['y'], -1.0, 1.0)
+			# TODO: check if z is being used
+			data = []
+			if state.numFrames.get() == 1 or not equationUsesZ():
+				z = clampZToNumFrames(state.z.get())
+				points = getPoints(2048, z)
+				if points['error'] is None:
+					data.extend(points['y'])
+			else:
+				inc = 1 / (state.numFrames.get()  - 1)
+				pos = 0
+				for i in range(int(state.numFrames.get())):
+					z = clampZToNumFrames(pos)
+					points = getPoints(2048, z)
+					if points['error'] is None:
+						data.extend(points['y'])
+					pos += inc
+
+			data = scaleToRange(data, -1.0, 1.0)
 
 			subtype = 'PCM_24' if filename_lower.endswith('.flac') else 'FLOAT'
 
@@ -514,8 +561,6 @@ def main():
 
 	nameTextInput = ttk.Entry(header, width = 40, textvariable=state.name) # SET THE LFO NAME
 	nameTextInput.grid(row = 0, column = 1, sticky = tk.W)
-
-	# smooth = tk.BooleanVar() #ENABLE SMOOTHING
 
 	presetName = tk.StringVar() # LOAD PRESETS
 	presetMenu = ttk.OptionMenu(header, presetName, presetOptions[0], *presetOptions, command = lambda e: loadSelectedPreset())
@@ -596,6 +641,26 @@ def main():
 	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
 	ttk.Label(adder, textvariable = state.resolution) .grid(row = 4, column = 5, sticky = tk.W)
 
+	ttk.Label(adder, text = "x Start: ") .grid(row = 5, column = 0, sticky = tk.E)
+	ttk.Label(adder, text = "x End: ") .grid(row = 5, column = 2, sticky = tk.E)
+	xStartTextField = ttk.Entry(adder, width = 10, textvariable=state.xStart)
+	xStartTextField.grid(row = 5, column = 1, sticky = tk.W)
+
+	xEndTextField = ttk.Entry(adder, width = 10, textvariable=state.xEnd)
+	xEndTextField.grid(row = 5, column = 3, sticky = tk.W)
+
+	ttk.Label(adder, text = "y Start: ") .grid(row = 6, column = 0, sticky = tk.E)
+	ttk.Label(adder, text = "y End: ") .grid(row = 6, column = 2, sticky = tk.E)
+	yStartTextField = ttk.Entry(adder, width = 10, textvariable=state.yStart)
+	yStartTextField.grid(row = 6, column = 1, sticky = tk.W)
+	yEndTextField = ttk.Entry(adder, width = 10, textvariable=state.yEnd)
+	yEndTextField.grid(row = 6, column = 3, sticky = tk.W)
+
+	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	xEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+
 	ttk.Label(adder, text = "x Phase Offset:" ) .grid(row = 7, column = 0, sticky = tk.E)
 
 	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = state.phase, value = 0, command = handlePhaseChanged)
@@ -603,25 +668,17 @@ def main():
 	xPhase.bind('<Double-1>', lambda event: xPhase.set(0))
 	ttk.Label(adder, textvariable = state.phase) .grid(row = 7, column = 5, sticky = tk.W)
 
-	ttk.Label(adder, text = "x Start: ") .grid(row = 5, column = 0, sticky = tk.E)
-	ttk.Label(adder, text = "x End: ") .grid(row = 5, column = 2, sticky = tk.E)
-	xStartTextField = ttk.Entry(adder, width = 10, textvariable=state.xStartStringValue)
-	xStartTextField.grid(row = 5, column = 1, sticky = tk.W)
+	ttk.Label(adder, text="z Position").grid(row=8, column=0, sticky = tk.E)
+	zScale = ttk.Scale(adder, from_ = 0, to = 1, orient = 'horizontal', variable = state.z, value = 0, command = handleZPositionChanged)
+	zScale.grid(row = 8, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
+	zScale.bind('<Double-1>', lambda event: zScale.set(0))
+	ttk.Label(adder, textvariable = state.z) .grid(row = 8, column = 5, sticky = tk.W)
 
-	xEndTextField = ttk.Entry(adder, width = 10, textvariable=state.xEndStringValue)
-	xEndTextField.grid(row = 5, column = 3, sticky = tk.W)
-
-	ttk.Label(adder, text = "y Start: ") .grid(row = 6, column = 0, sticky = tk.E)
-	ttk.Label(adder, text = "y End: ") .grid(row = 6, column = 2, sticky = tk.E)
-	yStartTextField = ttk.Entry(adder, width = 10, textvariable=state.yStartStringValue)
-	yStartTextField.grid(row = 6, column = 1, sticky = tk.W)
-	yEndTextField = ttk.Entry(adder, width = 10, textvariable=state.yEndStringValue)
-	yEndTextField.grid(row = 6, column = 3, sticky = tk.W)
-
-	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
-	xEndTextField.config(validate="key", validatecommand=(reg, '%P'))
-	yStartTextField.config(validate="key", validatecommand=(reg, '%P'))
-	yEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+	ttk.Label(adder, text="Num Z Frames").grid(row=9, column=0, sticky = tk.E)
+	numFramesScale = ttk.Scale(adder, from_ = 1, to = 256, orient = 'horizontal', variable = state.numFrames, value = 0, command = handleNumFramesChanged)
+	numFramesScale.grid(row = 9, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
+	numFramesScale.bind('<Double-1>', lambda event: numFramesScale.set(256))
+	ttk.Label(adder, textvariable = state.numFrames) .grid(row = 9, column = 5, sticky = tk.W)
 
 	# ttk.Separator(main, orient = 'horizontal') .grid(row = 3, column = 0, sticky = tk.NSEW, pady = 10)
 

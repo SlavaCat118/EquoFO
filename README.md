@@ -25,6 +25,8 @@ Install them all using `pip install numpy scipy soundfile`
 -   **xStart** and **xEnd** control which x-values will be sampled
 -   **yStart** and **yEnd** control which y-values will be used
 -   **xPhase** nudges the sampled points in either direction
+-   **z Position** For 3D waveforms. Moves wave along the z-axis (0-1)
+-   **Num Z Frames** For 3D waveforms. Controls z number of positions to snap to (1-256) as well as the number of 2048 sample frames to export as audio
 
 ## The Equation Viewer
 

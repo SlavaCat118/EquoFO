@@ -33,5 +33,14 @@
         "range": [-3.141592653589793, 3.141592653589793, -6, 6],
         "resolution": 100,
         "xPhase": 0.0
+    },
+    "Basic Wavetable": {
+        "smooth": false,
+        "equation": "math.sin(math.pi * math.pow(x * math.e, 1 + z))",
+        "range": [0.0, 1.0, -1.0, 1.0],
+        "resolution": 100,
+        "xPhase": 0.0,
+        "zPosition": 0.0,
+        "numFrames": 256
     }
 }

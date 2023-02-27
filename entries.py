@@ -9,6 +9,9 @@ def getEntry(text):
 		"sinh(𝑥)":"math.sinh( ` )",
 		"cosh(𝑥)":"math.cosh( ` )",
 		"tanh(𝑥)":"math.tanh( ` )",
+		"asinh(𝑥)":"np.asinh( ` )",
+		"acosh(𝑥)":"np.acosh( ` )",
+		"atanh(𝑥)":"np.atanh( ` )",
 		"degrees(𝑥)":"math.degrees( ` )",
 		"radians(𝑥)":"math.radians( ` )",
 
@@ -20,6 +23,7 @@ def getEntry(text):
 		"√":"math.sqrt( ` )",
 		"^":" ** `",
 		"//":" // `",
+		"!":"np.factorial( ` )",
 
 		"(":"( `",
 		")":" )`",
@@ -28,6 +32,7 @@ def getEntry(text):
 		"π":"math.pi`",
 		"𝑒":"math.e`",
 		"τ (tau)":"math.tau`",
+		"z":"z `",
 
 		"ceil(𝑥)":"math.ceil( ` )",
 		"floor(𝑥)":"math.floor( ` )",

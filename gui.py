@@ -2,16 +2,18 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 import fileHandler as fh
+
 import math
 import numpy as np
 from scipy import special
+
 import random
 import entries
 import soundfile as sf
 import traceback
 import re
 
-PADDING = 2
+PADDING = 5
 
 # support for all math.{name} functions
 np.tau = math.tau
@@ -43,7 +45,11 @@ class AppState:
 		self.yEnd = tk.StringVar()
 		self.resolution = tk.IntVar()
 		self.phase = tk.DoubleVar()
+		self.phaseStart = tk.DoubleVar()
+		self.phaseEnd = tk.DoubleVar()
 		self.z = tk.DoubleVar() # z position (x/y/z axis)
+		self.zStart = tk.DoubleVar()
+		self.zEnd = tk.DoubleVar()
 		self.numFrames = tk.IntVar() # num wavetable frames (1-256)
 		self.reset()
 	def reset(self):
@@ -56,7 +62,11 @@ class AppState:
 		self.yEnd.set(1)
 		self.resolution.set(17)
 		self.phase.set(0)
+		self.phaseStart.set(-1)
+		self.phaseEnd.set(1)
 		self.z.set(0)
+		self.zStart.set(0)
+		self.zEnd.set(1)
 		self.numFrames.set(256)
 	def getXStart(self):
 		return float(self.xStart.get())
@@ -66,6 +76,14 @@ class AppState:
 		return float(self.yStart.get())
 	def getYEnd(self):
 		return float(self.yEnd.get())
+	def getPhaseStart(self):
+		return float(self.phaseStart.get())
+	def getPhaseEnd(self):
+		return float(self.phaseEnd.get())
+	def getZStart(self):
+		return float(self.zStart.get())
+	def getZEnd(self):
+		return float(self.zEnd.get())
 
 
 # https://stackoverflow.com/questions/3221956/how-do-i-display-tooltips-in-tkinter
@@ -136,18 +154,18 @@ def main():
 	root2.grid(row = 0, column = 0, sticky = tk.NSEW)
 
 	main = ttk.Frame(root2)
-	main.grid(row = 0, column = 0, padx = 10, pady = (10,0))
+	main.grid(row = 0, column = 0, padx = PADDING, pady = PADDING)
 
 	# Vars
-	trigOptions = ['sin(𝑥)','cos(𝑥)','tan(𝑥)','asin(𝑥)','acos(𝑥)','atan(𝑥)','sinh(𝑥)','cosh(𝑥)','tanh(𝑥)','degrees(𝑥)','radians(𝑥)']
-	operatorOptions = ['+','-','×','÷','%','√','^','//']
+	trigOptions = ['sin(𝑥)','cos(𝑥)','tan(𝑥)','asin(𝑥)','acos(𝑥)','atan(𝑥)','sinh(𝑥)','cosh(𝑥)','tanh(𝑥)','asinh(𝑥)','acosh(𝑥)','atanh(𝑥)','degrees(𝑥)','radians(𝑥)']
+	operatorOptions = ['+','-','×','÷','%','√','^','//',"!"]
 	symbolOptions = ['(',')']
-	variableOptions = ['𝑥','π','𝑒','τ (tau)']
+	variableOptions = ['𝑥','π','𝑒','τ (tau)','z']
 	miscOptions = ['ceil(𝑥)','floor(𝑥)','abs(𝑥)','loge(𝑥)', 'log2(𝑥)', 'log10(𝑥)','random(start, stop)', 'uniform(start, stop)', 'round(𝑥,n)']
 	presetsDB = fh.readJson("presets.json")
 	presetOptions = list(presetsDB.keys())
 	canvasWidth = 650
-	canvasHeight = 300
+	canvasHeight = 375
 
 	#Images
 	loadIcon = tk.PhotoImage(file="icons/loadIcon.png")
@@ -211,7 +229,15 @@ def main():
 			],
 			'resolution': state.resolution.get(),
 			'xPhase':state.phase.get(),
+			'xPhaseRange':[
+				state.getPhaseStart(),
+				state.getPhaseEnd()
+			],
 			'zPosition': state.z.get(),
+			'zRange':[
+				state.getZStart(),
+				state.getZEnd()
+			],
 			'numFrames': state.numFrames.get(),
 		}
 		presetsDB[state.name.get().strip()] = values
@@ -231,6 +257,11 @@ def main():
 		state.yStart.set(preset['range'][2])
 		state.yEnd.set(preset['range'][3])
 		state.resolution.set(preset['resolution'])
+
+		state.phaseStart.set(preset["xPhaseRange"][0])
+		state.phaseEnd.set(preset["xPhaseRange"][1])
+		state.zStart.set(preset["zRange"][0])
+		state.zEnd.set(preset["zRange"][1])
 
 		xPhase.set(preset['xPhase'])
 		zScale.set(preset.get('zPosition', 0))
@@ -408,12 +439,20 @@ def main():
 		updateXYPlot()
 
 	def handlePhaseChanged(event):
-		state.phase.set(round(float(state.phase.get()), 5))
+		state.phase.set(round(float(state.phase.get()), 2))
 		updateXYPlot()
 
 	def handleZPositionChanged(event):
-		state.z.set(round(float(state.z.get()), 5))
+		state.z.set(round(float(state.z.get()), 2))
 		updateXYPlot()
+
+	def handlePhaseBoundsChanged(*event):
+		xPhase.config(from_ = state.getPhaseStart())
+		xPhase.config(to = state.getPhaseEnd())
+
+	def handleZBoundsChanged(*event):
+		zScale.config(from_ = state.getZStart())
+		zScale.config(to = state.getZEnd())
 
 	def intEntryCallback(text):
 		allowedChars = "1234567890-+/*."
@@ -425,7 +464,8 @@ def main():
 	def normalizeXYPlotToLFOPreset():
 		z = clampZToNumFrames(state.z.get())
 		points = getPoints(state.resolution.get(), z)
-		if 'error' in points:
+		print(points)
+		if 'error' in points and points['error'] != None:
 			return ([0,0], [0,0])
 		xpoints = scaleToRange(points['x'],0,1)
 		ypoints = scaleToRange(points['y'],0,1)
@@ -465,6 +505,7 @@ def main():
 
 	def copyLFOPresetToClipboard():
 		data = serializeIntoVitalLFOPreset()
+		root.clipboard_clear()
 		root.clipboard_append(data)
 
 	def handleEquationUpdated(var, indx, mode):
@@ -500,12 +541,12 @@ def main():
 				("WAV", "*.wav"),),
 			# defaultextension = '.flac',
 			initialfile = state.name.get().strip())
+
 		if file is not None:
 			filename = file.name
 			filename_lower = filename.lower()
 			file.close()
 
-			# TODO: check if z is being used
 			data = []
 			if state.numFrames.get() == 1 or not equationUsesZ():
 				z = clampZToNumFrames(state.z.get())
@@ -515,8 +556,10 @@ def main():
 			else:
 				inc = 1 / (state.numFrames.get()  - 1)
 				pos = 0
+				zRangeDiff = state.getZEnd() - state.getZStart()
 				for i in range(int(state.numFrames.get())):
 					z = clampZToNumFrames(pos)
+					z = (zRangeDiff*z) + state.getZStart()
 					points = getPoints(2048, z)
 					if points['error'] is None:
 						data.extend(points['y'])
@@ -579,12 +622,12 @@ def main():
 	initPresetButton.grid(row = 0, column = 9, sticky = tk.W)
 	initPresetButtonTT = Tooltip(initPresetButton, 'Initialize a new preset')
 
-	# ttk.Separator(main, orient = 'horizontal') .grid(row = 1, column = 0, sticky = tk.NSEW, pady = PADDING)
+	ttk.Separator(main, orient = 'horizontal') .grid(row = 1, column = 0, sticky = tk.NSEW, pady = PADDING)
 
 	# Adder
-	adderFrame = ttk.LabelFrame(main)
+	adderFrame = ttk.Frame(main)
 	adder = ttk.Frame(adderFrame)
-	adderFrame.grid(row=2, column=0, sticky = tk.NSEW)
+	adderFrame.grid(row=2, column=0, sticky = tk.NSEW, pady = PADDING)
 	adderFrame.columnconfigure(1, weight=2)
 	adder.grid(row = 0, column = 0, sticky = tk.N, columnspan=2)
 
@@ -636,77 +679,28 @@ def main():
 	numAddButton.grid(row = 3, column = 5, sticky = tk.NSEW, padx = PADDING)
 	numAddButtonTT = Tooltip(numAddButton, "Add to raw equation at index")
 
-	ttk.Label(adder, text = "Resolution: ") .grid(row = 4, column = 0, sticky = tk.E)
-	resolutionSlider = ttk.Scale(adder,from_ = 4, to = 100, orient = 'horizontal', variable = state.resolution, value = 10, command = handleResolutionChanged)
-	resolutionSlider.grid(row = 4, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
-	ttk.Label(adder, textvariable = state.resolution) .grid(row = 4, column = 5, sticky = tk.W)
-
-	ttk.Label(adder, text = "x Start: ") .grid(row = 5, column = 0, sticky = tk.E)
-	ttk.Label(adder, text = "x End: ") .grid(row = 5, column = 2, sticky = tk.E)
-	xStartTextField = ttk.Entry(adder, width = 10, textvariable=state.xStart)
-	xStartTextField.grid(row = 5, column = 1, sticky = tk.W)
-
-	xEndTextField = ttk.Entry(adder, width = 10, textvariable=state.xEnd)
-	xEndTextField.grid(row = 5, column = 3, sticky = tk.W)
-
-	ttk.Label(adder, text = "y Start: ") .grid(row = 6, column = 0, sticky = tk.E)
-	ttk.Label(adder, text = "y End: ") .grid(row = 6, column = 2, sticky = tk.E)
-	yStartTextField = ttk.Entry(adder, width = 10, textvariable=state.yStart)
-	yStartTextField.grid(row = 6, column = 1, sticky = tk.W)
-	yEndTextField = ttk.Entry(adder, width = 10, textvariable=state.yEnd)
-	yEndTextField.grid(row = 6, column = 3, sticky = tk.W)
-
-	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
-	xEndTextField.config(validate="key", validatecommand=(reg, '%P'))
-	yStartTextField.config(validate="key", validatecommand=(reg, '%P'))
-	yEndTextField.config(validate="key", validatecommand=(reg, '%P'))
-
-	ttk.Label(adder, text = "x Phase Offset:" ) .grid(row = 7, column = 0, sticky = tk.E)
-
-	xPhase = ttk.Scale(adder, from_ = -1, to = 1, orient = 'horizontal', variable = state.phase, value = 0, command = handlePhaseChanged)
-	xPhase.grid(row = 7, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
-	xPhase.bind('<Double-1>', lambda event: xPhase.set(0))
-	ttk.Label(adder, textvariable = state.phase) .grid(row = 7, column = 5, sticky = tk.W)
-
-	ttk.Label(adder, text="z Position").grid(row=8, column=0, sticky = tk.E)
-	zScale = ttk.Scale(adder, from_ = 0, to = 1, orient = 'horizontal', variable = state.z, value = 0, command = handleZPositionChanged)
-	zScale.grid(row = 8, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
-	zScale.bind('<Double-1>', lambda event: zScale.set(0))
-	ttk.Label(adder, textvariable = state.z) .grid(row = 8, column = 5, sticky = tk.W)
-
-	ttk.Label(adder, text="Num Z Frames").grid(row=9, column=0, sticky = tk.E)
-	numFramesScale = ttk.Scale(adder, from_ = 1, to = 256, orient = 'horizontal', variable = state.numFrames, value = 0, command = handleNumFramesChanged)
-	numFramesScale.grid(row = 9, column = 1, columnspan = 4, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
-	numFramesScale.bind('<Double-1>', lambda event: numFramesScale.set(256))
-	ttk.Label(adder, textvariable = state.numFrames) .grid(row = 9, column = 5, sticky = tk.W)
-
-	# ttk.Separator(main, orient = 'horizontal') .grid(row = 3, column = 0, sticky = tk.NSEW, pady = 10)
+	ttk.Separator(main, orient = 'horizontal') .grid(row = 3, column = 0, sticky = tk.NSEW, pady = PADDING)
 
 	# Equater
 	equater = ttk.Frame(main)
-	equater.grid(row = 4, column = 0)
+	equater.grid(row = 4, column = 0, pady=PADDING)
 
 	ttk.Label(equater, text = "Raw Equation: ") .grid(row = 0, column = 0, sticky = tk.NSEW)
 
-	equationTextInput = ttk.Entry(equater, width = 95, textvariable = state.equation)
-	equationTextInput.grid(row = 1, column = 0, sticky = tk.W, ipady = 5)
+	equationTextInput = ttk.Entry(equater, width = 75, textvariable = state.equation)
+	equationTextInput.grid(row = 0, column = 1, sticky = tk.W, ipady = 5)
 
 	state.equation.trace_add('write', handleEquationUpdated)
 
 	eqButtons = ttk.Frame(equater)
-	eqButtons.grid(row = 2, column = 0, sticky = tk.N)
+	eqButtons.grid(row = 0, column = 2, sticky = tk.N)
 
 	ttk.Button(eqButtons, image = leftIcon, command = handleShiftLeftButtonClick) .grid(row = 0, column = 0)
 	ttk.Button(eqButtons, image = rightIcon, command = handleShiftRightButtonClick) .grid(row = 0, column = 1)
 	ttk.Button(eqButtons, image = trashIcon, command = handleClearButtonClick) .grid(row = 0, column = 2)
 	ttk.Button(eqButtons, image = backspaceIcon, command = handleBackspaceButtonClick) .grid(row = 0, column = 3)
 
-	ttk.Label(eqButtons, text = "Scale Y to fit: ") .grid(row = 0, column = 4, sticky = tk.W)
-	scaleY = tk.BooleanVar()
-	scaleY.set(0)
-	ttk.Checkbutton(eqButtons, variable = scaleY) .grid(row = 0, column = 5, sticky = tk.W)
-
-	# ttk.Separator(main, orient = 'horizontal') .grid(row = 5, column = 0, sticky = tk.NSEW, pady = PADDING)
+	ttk.Separator(main, orient = 'horizontal') .grid(row = 5, column = 0, sticky = tk.NSEW, pady = PADDING)
 
 	# Previewer
 	previewer = ttk.Frame(main)
@@ -717,42 +711,136 @@ def main():
 
 
 	prettyEquation = ttk.Entry(previewer, textvariable=prettyEquationString, state='readonly', width=108)
-	prettyEquation.grid(row = 0, column = 0, sticky = tk.N, columnspan=8)
+	prettyEquation.grid(row = 0, column = 0, sticky = tk.NSEW, columnspan= 2)
 
 	prettyEqScroll = ttk.Scrollbar(previewer, orient='horizontal', command=prettyEquation.xview)
 	prettyEquation.config(xscrollcommand=prettyEqScroll.set)
 	prettyEqScroll.grid(row=1,column=0,sticky=tk.NSEW,columnspan=2)
 
-	xyPlot = tk.Canvas(previewer, width = canvasWidth, height = canvasHeight, bg = 'white')
+	xyPlot = tk.Canvas(previewer, width = canvasWidth, height = canvasHeight, bg = 'white', relief = 'sunken', border = 5)
 	xyPlot.grid(row = 2, column = 0, sticky = tk.N)
 
 	XYPlotOptions = ttk.Frame(previewer)
 	XYPlotOptions.grid(row=2,column=1,sticky=tk.NSEW)
 
 	updatePlotButton = ttk.Button(XYPlotOptions, text = "Regenerate Plot", command = updateXYPlot)
-	updatePlotButton.grid(row = 0, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
+	updatePlotButton.grid(row = 0, column = 0, sticky = tk.NSEW, columnspan=2)
 	updatePlotButtonTT = Tooltip(updatePlotButton, "Force updates the x/y plot")
 
-	ttk.Button(XYPlotOptions, text = "Copy Vital LFO", command = copyLFOPresetToClipboard) .grid(row = 1, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
-	ttk.Button(XYPlotOptions, text = "Export LFO File", command = exportAsLFOPreset) .grid(row = 3, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
-	ttk.Button(XYPlotOptions, text = "Export Waveform", command = exportAsWavetable) .grid(row = 4, column = 0, sticky = tk.NSEW, pady = (0,PADDING),columnspan=2)
+	ttk.Button(XYPlotOptions, text = "Copy Vital LFO", command = copyLFOPresetToClipboard) .grid(row = 1, column = 0, sticky = tk.NSEW, columnspan=2)
+	ttk.Button(XYPlotOptions, text = "Export LFO File", command = exportAsLFOPreset) .grid(row = 3, column = 0, sticky = tk.NSEW, columnspan=2)
+	ttk.Button(XYPlotOptions, text = "Export Waveform", command = exportAsWavetable) .grid(row = 4, column = 0, sticky = tk.NSEW, columnspan=2)
 
-	ttk.Label(XYPlotOptions, text = "View Points: ") .grid(row = 5, column = 0, sticky = tk.E)
+	ttk.Label(XYPlotOptions, text = "View Points: ") .grid(row = 5, column = 0, sticky = tk.W)
 	viewPoints = tk.BooleanVar()
 	viewPoints.set(True)
-	ttk.Checkbutton(XYPlotOptions, var = viewPoints) .grid(row = 5, column = 1, sticky = tk.W)
+	ttk.Checkbutton(XYPlotOptions, var = viewPoints) .grid(row = 5, column = 1, sticky = tk.E)
 
-	ttk.Label(XYPlotOptions, text = "View Unsmoothed: ") .grid(row = 6, column = 0, sticky = tk.E)
+	ttk.Label(XYPlotOptions, text = "View Unsmoothed: ") .grid(row = 6, column = 0, sticky = tk.W)
 	viewUnsmoothedVal = tk.BooleanVar()
 	viewUnsmoothedVal.set(True)
-	ttk.Checkbutton(XYPlotOptions, var = viewUnsmoothedVal) .grid(row = 6, column = 1, sticky = tk.W)
+	ttk.Checkbutton(XYPlotOptions, var = viewUnsmoothedVal) .grid(row = 6, column = 1, sticky = tk.E)
 
-	ttk.Label(XYPlotOptions, text = "Smooth: ") .grid(row = 7, column = 0, sticky = tk.E)
-	ttk.Checkbutton(XYPlotOptions, var = state.smooth) .grid(row = 7, column = 1, sticky = tk.W)
+	ttk.Label(XYPlotOptions, text = "Smooth: ") .grid(row = 7, column = 0, sticky = tk.W)
+	ttk.Checkbutton(XYPlotOptions, var = state.smooth) .grid(row = 7, column = 1, sticky = tk.E)
 
-	# StatusBar
-	# status = ttk.Label(root2, text = 'Welcome to EquaFO!', borderwidth = 1, relief = "sunken")
-	# status.grid(row = 1, column = 0, sticky = tk.NSEW, ipady = 3)
+	ttk.Label(XYPlotOptions, text = "Scale Y to fit: ") .grid(row = 8, column = 0, sticky = tk.W)
+	scaleY = tk.BooleanVar()
+	scaleY.set(0)
+	ttk.Checkbutton(XYPlotOptions, variable = scaleY) .grid(row = 8, column = 1, sticky = tk.E)
+
+	# Adjustments
+
+	adjustmentsFrame = ttk.Frame(XYPlotOptions)
+
+	# Bounds Editor
+	boundsFrame = ttk.Frame(adjustmentsFrame)
+
+	ttk.Label(boundsFrame, text = "≤ X ≤") .grid(row = 5, column = 1, sticky = tk.N)
+	xStartTextField = ttk.Entry(boundsFrame, width = 5, textvariable=state.xStart)
+	xStartTextField.grid(row = 5, column = 0, sticky = tk.E)
+	xEndTextField = ttk.Entry(boundsFrame, width = 5, textvariable=state.xEnd)
+	xEndTextField.grid(row = 5, column = 2, sticky = tk.W)
+
+	ttk.Label(boundsFrame, text = "≤ Y ≤") .grid(row = 6, column = 1, sticky = tk.N)
+	yStartTextField = ttk.Entry(boundsFrame, width = 5, textvariable=state.yStart)
+	yStartTextField.grid(row = 6, column = 0, sticky = tk.E)
+	yEndTextField = ttk.Entry(boundsFrame, width = 5, textvariable=state.yEnd)
+	yEndTextField.grid(row = 6, column = 2, sticky = tk.W)
+
+	xStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	xEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yStartTextField.config(validate="key", validatecommand=(reg, '%P'))
+	yEndTextField.config(validate="key", validatecommand=(reg, '%P'))
+
+	boundsFrame.grid(row = 0, column = 0, sticky = tk.N, columnspan = 3)
+
+	ttk.Separator(adjustmentsFrame, orient="horizontal") .grid(row=1,column=0, sticky=tk.NSEW, pady=PADDING, columnspan=3)
+
+	# XPhase
+
+	ttk.Label(adjustmentsFrame, text = "X Phase:" ) .grid(row = 2, column = 0, sticky = tk.W)
+	xPhaseAdjust = ttk.Frame(adjustmentsFrame)
+	xPhaseAdjust.grid(row=2, column=1,sticky=tk.W,padx=PADDING)
+	ttk.Entry(adjustmentsFrame, textvariable=state.phase, width=5) .grid(row = 2, column = 2)
+
+	xPhaseStartEntry = ttk.Entry(xPhaseAdjust, textvariable=state.phaseStart, width=3) 
+	xPhaseStartEntry.grid(row=0, column=0)
+	xPhaseEndEntry = ttk.Entry(xPhaseAdjust, textvariable=state.phaseEnd, width=3) 
+	xPhaseEndEntry.grid(row=0, column=2)
+	xPhase = ttk.Scale(xPhaseAdjust, variable=state.phase, from_=state.getPhaseStart(), to=state.getPhaseEnd(), command=handlePhaseChanged)
+	xPhase.grid(row=0, column=1)
+
+	state.phaseStart.trace_add("write", handlePhaseBoundsChanged)
+	state.phaseEnd.trace_add("write", handlePhaseBoundsChanged)
+
+	xPhaseStartEntry.config(validate="key", validatecommand=(reg, '%P'))
+	xPhaseEndEntry.config(validate="key", validatecommand=(reg, '%P'))
+
+	xPhase.bind('<Double-1>', lambda event: xPhase.set(0))
+
+	# Z Pos
+
+	ttk.Label(adjustmentsFrame, text = "Z Position:" ) .grid(row = 3, column = 0, sticky = tk.W)
+	zAdjust = ttk.Frame(adjustmentsFrame)
+	zAdjust.grid(row=3, column=1,sticky=tk.W,padx=PADDING)
+	ttk.Entry(adjustmentsFrame, textvariable=state.z, width=5) .grid(row = 3, column = 2)
+
+	zStartEntry = ttk.Entry(zAdjust, textvariable=state.zStart, width=3) 
+	zStartEntry.grid(row=0, column=0)
+	zEndEntry = ttk.Entry(zAdjust, textvariable=state.zEnd, width=3) 
+	zEndEntry.grid(row=0, column=2)
+	zScale = ttk.Scale(zAdjust, variable=state.z, from_=state.getZStart(), to=state.getZEnd(), command=handleZPositionChanged)
+	zScale.grid(row=0, column=1)
+
+	state.zStart.trace_add("write", handleZBoundsChanged)
+	state.zEnd.trace_add("write", handleZBoundsChanged)
+
+	zStartEntry.config(validate="key", validatecommand=(reg, '%P'))
+	zEndEntry.config(validate="key", validatecommand=(reg, '%P'))
+
+	zScale.bind('<Double-1>', lambda event: zScale.set(0))
+
+	# ttk.Label(adjustmentsFrame, text="z Position").grid(row=2, column=0, sticky = tk.E)
+	# zScale = ttk.Scale(adjustmentsFrame, from_ = 0, to = 1, orient = 'horizontal', variable = state.z, value = 0, command = handleZPositionChanged)
+	# zScale.grid(row = 2, column = 1, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
+	# zScale.bind('<Double-1>', lambda event: zScale.set(0))
+	# ttk.Entry(adjustmentsFrame, textvariable = state.z, width = 5) .grid(row = 2, column = 2, sticky = tk.W)
+
+	ttk.Label(adjustmentsFrame, text="Num Z Frames: ").grid(row=4, column=0, sticky = tk.W)
+	numFramesScale = ttk.Scale(adjustmentsFrame, from_ = 1, to = 256, orient = 'horizontal', variable = state.numFrames, value = 0, command = handleNumFramesChanged)
+	numFramesScale.grid(row = 4, column = 1, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
+	numFramesScale.bind('<Double-1>', lambda event: numFramesScale.set(256))
+	ttk.Entry(adjustmentsFrame, textvariable = state.numFrames, width = 5) .grid(row = 4, column = 2, sticky = tk.W)
+
+	ttk.Label(adjustmentsFrame, text = "Resolution: ") .grid(row = 5, column = 0, sticky = tk.W)
+	resolutionSlider = ttk.Scale(adjustmentsFrame,from_ = 4, to = 100, orient = 'horizontal', variable = state.resolution, value = 10, command = handleResolutionChanged)
+	resolutionSlider.grid(row = 5, column = 1, sticky = tk.NSEW, pady = PADDING, padx = PADDING)
+	ttk.Entry(adjustmentsFrame, textvariable = state.resolution, width = 5) .grid(row = 5, column = 2, sticky = tk.W)
+
+	ttk.Separator(XYPlotOptions, orient = 'horizontal') .grid(row = 9, column = 0, columnspan = 2, sticky = tk.NSEW, pady= PADDING)
+
+	adjustmentsFrame.grid(row = 11, column = 0, sticky = tk.N, columnspan = 2)
 
 	def setFocus(event):
 		equationTextInput.focus_set()
@@ -771,3 +859,9 @@ def main():
 
 if __name__ == '__main__':
 	main()
+
+
+# TODO:
+"""
+Give Z changeable bounds and a scale
+"""

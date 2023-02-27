@@ -6,7 +6,7 @@ An equation based LFO generator for the GHOST and Vital synthesizers
 
 Install them all using `pip install numpy scipy soundfile`
 
-# Advanced
+# Manual [OUTDATED]
 
 ## The Header
 
